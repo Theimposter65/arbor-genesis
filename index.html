@@ -1574,14 +1574,30 @@ window.addEventListener('resize', () => {
   bloomPass.resolution.set(window.innerWidth, window.innerHeight);
 });
 
-// ─── HIDE LOADING ─────────────────────────────────────────
-setTimeout(() => {
-  document.getElementById('loading').classList.add('hidden');
-  setTimeout(() => document.getElementById('loading').style.display = 'none', 1000);
-}, 1500);
-
-// ─── START ─────���──────────────────────────────────────────
+// ─── START ──────────────────────────────────────────────────
 document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
+
+let sceneReady = false;
+let loadingHidden = false;
+
+function hideLoading() {
+  if (loadingHidden) return;
+  loadingHidden = true;
+  const el = document.getElementById('loading');
+  el.classList.add('hidden');
+  setTimeout(() => { el.style.display = 'none'; }, 1000);
+}
+
+// Patch into animate loop
+const _origAnimate = animate;
+animate = function(now) {
+  if (!sceneReady) {
+    sceneReady = true;
+    hideLoading();
+  }
+  return _origAnimate(now);
+};
+
 requestAnimationFrame(animate);
 
 </script>
