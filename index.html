@@ -5,49 +5,63 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Arbor Genesis — 3D Tree Growth</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; }
-  canvas { display: block; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; touch-action: none; }
+  canvas { display: block; touch-action: none; }
 
   #ui {
     position: fixed; top: 20px; left: 20px; z-index: 100;
     background: rgba(10, 10, 15, 0.75);
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px; padding: 20px 24px;
-    color: #e0e0e0; min-width: 260px;
+    border-radius: 16px; padding: 18px 22px;
+    color: #e0e0e0; min-width: 250px; max-width: 300px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    transition: all 0.3s ease;
+  }
+  .ui-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
   }
   #ui h2 {
-    font-size: 18px; font-weight: 600; margin-bottom: 4px;
+    font-size: 18px; font-weight: 600; margin-bottom: 2px;
     background: linear-gradient(135deg, #7ec850, #4a9e2e);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-  #ui .subtitle { font-size: 11px; color: #888; margin-bottom: 16px; letter-spacing: 1px; text-transform: uppercase; }
+  #ui .subtitle { font-size: 11px; color: #888; margin-bottom: 14px; letter-spacing: 1px; text-transform: uppercase; }
+
+  #ui-toggle {
+    display: none;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #c8e6a0; border-radius: 8px; width: 30px; height: 30px;
+    font-size: 13px; cursor: pointer; align-items: center; justify-content: center;
+  }
 
   .stat-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
   }
   .stat-row:last-child { border-bottom: none; }
-  .stat-label { font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
-  .stat-value { font-size: 13px; font-weight: 600; color: #c8e6a0; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 12px; font-weight: 600; color: #c8e6a0; font-variant-numeric: tabular-nums; }
 
   #timeline {
-    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-    z-index: 100; width: min(600px, 80vw);
+    position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+    z-index: 100; width: min(560px, calc(100vw - 32px));
     background: rgba(10, 10, 15, 0.75);
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px; padding: 16px 20px;
+    border-radius: 16px; padding: 14px 18px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
   }
   #timeline .bar-bg {
-    width: 100%; height: 6px; background: rgba(255,255,255,0.08);
-    border-radius: 3px; cursor: pointer; position: relative;
+    width: 100%; height: 8px; background: rgba(255,255,255,0.12);
+    border-radius: 4px; cursor: pointer; position: relative; touch-action: none;
   }
   #timeline .bar-fill {
-    height: 100%; border-radius: 3px; width: 0%;
+    height: 100%; border-radius: 4px; width: 0%;
     background: linear-gradient(90deg, #4a9e2e, #7ec850, #c8e6a0);
     transition: width 0.1s linear;
   }
@@ -56,12 +70,13 @@
     font-size: 11px; color: #777; font-variant-numeric: tabular-nums;
   }
   #timeline .controls {
-    display: flex; gap: 8px; margin-top: 10px; justify-content: center;
+    display: flex; gap: 8px; margin-top: 8px; justify-content: center;
   }
   #timeline button {
     background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-    color: #ccc; border-radius: 8px; padding: 6px 14px; font-size: 12px;
-    cursor: pointer; transition: all 0.2s;
+    color: #ccc; border-radius: 8px; padding: 8px 14px; font-size: 12px;
+    min-width: 40px; min-height: 38px;
+    cursor: pointer; transition: all 0.2s; touch-action: manipulation;
   }
   #timeline button:hover { background: rgba(255,255,255,0.12); color: #fff; }
   #timeline button.active { background: rgba(78, 158, 46, 0.3); border-color: rgba(126,200,80,0.4); color: #7ec850; }
@@ -74,10 +89,10 @@
   }
   #loading.hidden { opacity: 0; pointer-events: none; }
   #loading h1 {
-    font-size: 36px; font-weight: 200; letter-spacing: 8px; text-transform: uppercase;
+    font-size: clamp(24px, 6vw, 36px); font-weight: 200; letter-spacing: 8px; text-transform: uppercase;
     background: linear-gradient(135deg, #7ec850, #4a9e2e);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    margin-bottom: 20px;
+    margin-bottom: 20px; text-align: center;
   }
   #loading .spinner {
     width: 40px; height: 40px; border: 2px solid rgba(126,200,80,0.15);
@@ -88,9 +103,41 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   #hint {
-    position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
-    font-size: 11px; color: rgba(255,255,255,0.3); letter-spacing: 1px;
-    pointer-events: none; z-index: 50;
+    position: fixed; bottom: max(110px, calc(env(safe-area-inset-bottom) + 90px)); left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: rgba(255,255,255,0.35); letter-spacing: 1px;
+    pointer-events: none; z-index: 50; text-align: center; white-space: nowrap;
+  }
+
+  @media (max-width: 600px) {
+    #ui {
+      top: max(10px, env(safe-area-inset-top));
+      left: 10px; right: 10px;
+      min-width: unset; max-width: calc(100vw - 20px);
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+    #ui h2 { font-size: 15px; }
+    #ui .subtitle { font-size: 10px; margin-bottom: 8px; }
+    #ui-toggle { display: inline-flex; }
+    #ui.collapsed #ui-body { display: none; }
+    #ui.collapsed .subtitle { display: none; }
+    .stat-row { padding: 3px 0; }
+    .stat-label { font-size: 10px; }
+    .stat-value { font-size: 11px; }
+
+    #timeline {
+      padding: 10px 12px;
+      border-radius: 12px;
+      width: calc(100vw - 20px);
+    }
+    #timeline .controls { gap: 6px; }
+    #timeline button {
+      padding: 6px 8px; min-width: 34px; min-height: 34px; font-size: 11px;
+    }
+    #hint {
+      font-size: 10px;
+      bottom: max(95px, calc(env(safe-area-inset-bottom) + 80px));
+    }
   }
 </style>
 </head>
@@ -103,39 +150,46 @@
 </div>
 
 <div id="ui">
-  <h2>Arbor Genesis</h2>
-  <div class="subtitle">Real-time Growth Simulation</div>
-  <div class="stat-row">
-    <span class="stat-label">Elapsed</span>
-    <span class="stat-value" id="stat-time">0:00 / 3:00</span>
+  <div class="ui-header">
+    <div>
+      <h2>Arbor Genesis</h2>
+      <div class="subtitle">Real-time Growth Simulation</div>
+    </div>
+    <button id="ui-toggle" title="Toggle Stats">&#x25BE;</button>
   </div>
-  <div class="stat-row">
-    <span class="stat-label">Growth Stage</span>
-    <span class="stat-value" id="stat-stage">Seedling</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Height</span>
-    <span class="stat-value" id="stat-height">0.0 m</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Branches</span>
-    <span class="stat-value" id="stat-branches">0</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Leaves</span>
-    <span class="stat-value" id="stat-leaves">0</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Grass Blades</span>
-    <span class="stat-value" id="stat-grass">0</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Wind Speed</span>
-    <span class="stat-value" id="stat-wind">0.0 m/s</span>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">FPS</span>
-    <span class="stat-value" id="stat-fps">60</span>
+  <div id="ui-body">
+    <div class="stat-row">
+      <span class="stat-label">Elapsed</span>
+      <span class="stat-value" id="stat-time">0:00 / 3:00</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Growth Stage</span>
+      <span class="stat-value" id="stat-stage">Seedling</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Height</span>
+      <span class="stat-value" id="stat-height">0.0 m</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Branches</span>
+      <span class="stat-value" id="stat-branches">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Leaves</span>
+      <span class="stat-value" id="stat-leaves">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Grass Blades</span>
+      <span class="stat-value" id="stat-grass">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Wind Speed</span>
+      <span class="stat-value" id="stat-wind">0.0 m/s</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">FPS</span>
+      <span class="stat-value" id="stat-fps">60</span>
+    </div>
   </div>
 </div>
 
@@ -157,12 +211,12 @@
   </div>
 </div>
 
-<div id="hint">Drag to orbit &bull; Scroll to zoom</div>
+<div id="hint">Drag to orbit &bull; Pinch to zoom</div>
 
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+    "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
   }
 }
@@ -176,7 +230,6 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 
 // ─── SIMPLEX NOISE ─────────────────────────────────────────
 class SimplexNoise {
@@ -234,16 +287,22 @@ const GROWTH_PHASES = [
 ];
 
 // ─── SCENE SETUP ──────────────────────────────────────────
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x87CEEB, 0.0008);
 scene.background = new THREE.Color(0x87CEEB);
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
-camera.position.set(8, 4, 12);
+if (isMobile) {
+  camera.position.set(10, 4.5, 15);
+} else {
+  camera.position.set(8, 4, 12);
+}
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: false, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -263,12 +322,12 @@ controls.autoRotate = true;
 controls.autoRotateSpeed = 0.3;
 controls.update();
 
-// ─── LIGHTING ──────────────────────────────────────���──────
+// ─── LIGHTING ─────────────────────────────────────────────
 // Sun (directional) — main light
 const sunLight = new THREE.DirectionalLight(0xFFF8E7, 1.8);
 sunLight.position.set(50, 80, 30);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
 sunLight.shadow.camera.near = 1;
 sunLight.shadow.camera.far = 200;
 sunLight.shadow.camera.left = -25;
@@ -412,7 +471,7 @@ createGround();
 
 // ─── GRASS SYSTEM ─────────────────────────────────────────
 function createGrassField() {
-  const bladeCount = 150000;
+  const bladeCount = isMobile ? 25000 : 50000; // Adaptive for mobile/desktop
   const spreadRadius = 40;
   const trunkPos = new THREE.Vector3(0, 0, 0);
 
@@ -1148,7 +1207,7 @@ class TreeGenerator {
 
 // ─── ATMOSPHERIC PARTICLES ────────────────────────────────
 function createParticles() {
-  const count = 3000;
+  const count = 1000; // Reduced particle count for faster init
   const positions = new Float32Array(count * 3);
   const sizes = new Float32Array(count);
   const phases = new Float32Array(count);
@@ -1396,11 +1455,29 @@ btnReset.addEventListener('click', () => {
   setSpeed(1.0, 'btn-play');
 });
 
-timelineBar.addEventListener('click', (e) => {
+function handleTimelineSeek(e) {
   const rect = timelineBar.getBoundingClientRect();
-  const fraction = (e.clientX - rect.left) / rect.width;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const fraction = (clientX - rect.left) / rect.width;
   state.growth = Math.max(0, Math.min(1, fraction));
-});
+}
+timelineBar.addEventListener('click', handleTimelineSeek);
+timelineBar.addEventListener('touchstart', handleTimelineSeek, { passive: true });
+timelineBar.addEventListener('touchmove', handleTimelineSeek, { passive: true });
+
+// Mobile collapsible stats UI
+const uiToggle = document.getElementById('ui-toggle');
+const uiPanel = document.getElementById('ui');
+if (uiToggle && uiPanel) {
+  if (isMobile) {
+    uiPanel.classList.add('collapsed');
+    uiToggle.innerHTML = '&#x25B8;';
+  }
+  uiToggle.addEventListener('click', () => {
+    uiPanel.classList.toggle('collapsed');
+    uiToggle.innerHTML = uiPanel.classList.contains('collapsed') ? '&#x25B8;' : '&#x25BE;';
+  });
+}
 
 // ─── ANIMATION LOOP ───────────────────────────────────────
 let lastTime = performance.now();
@@ -1409,6 +1486,11 @@ let fpsTime = 0;
 
 function animate(now) {
   requestAnimationFrame(animate);
+
+  if (!sceneReady) {
+    sceneReady = true;
+    hideLoading();
+  }
 
   const dt = Math.min((now - lastTime) / 1000, 0.1); // cap delta
   lastTime = now;
@@ -1496,19 +1578,14 @@ function hideLoading() {
   if (loadingHidden) return;
   loadingHidden = true;
   const el = document.getElementById('loading');
-  el.classList.add('hidden');
-  setTimeout(() => { el.style.display = 'none'; }, 1000);
+  if (el) {
+    el.classList.add('hidden');
+    setTimeout(() => { el.style.display = 'none'; }, 1000);
+  }
 }
 
-// Patch into animate loop
-const _origAnimate = animate;
-animate = function(now) {
-  if (!sceneReady) {
-    sceneReady = true;
-    hideLoading();
-  }
-  return _origAnimate(now);
-};
+// Safety timeout: never stay stuck on loading screen
+setTimeout(hideLoading, 2500);
 
 requestAnimationFrame(animate);
 
