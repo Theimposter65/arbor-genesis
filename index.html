@@ -678,6 +678,121 @@ function createGrassField() {
 
 const grassSystem = createGrassField();
 
+// ─── GENSHIN IMPACT LEAF CLUSTER TEXTURE ──────────────────
+function createGenshinLeafTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 512, 512);
+
+  function drawAnimeLeaf(cx, cy, length, width, angle, baseCol, highCol) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    // Lanceolate sharp anime leaf blade
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(-width * 0.75, length * 0.35, -width * 0.85, length * 0.72, 0, length);
+    ctx.bezierCurveTo(width * 0.85, length * 0.72, width * 0.75, length * 0.35, 0, 0);
+    ctx.closePath();
+
+    ctx.fillStyle = baseCol;
+    ctx.fill();
+
+    // Darker anime outline
+    ctx.strokeStyle = '#18481a';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Golden-lime central spine
+    ctx.beginPath();
+    ctx.moveTo(0, length * 0.08);
+    ctx.quadraticCurveTo(-width * 0.05, length * 0.5, 0, length * 0.92);
+    ctx.strokeStyle = highCol;
+    ctx.lineWidth = Math.max(2.5, width * 0.22);
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Woody twiglet branchlets
+  ctx.strokeStyle = '#322014';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(256, 490);
+  ctx.quadraticCurveTo(256, 320, 256, 170);
+  ctx.moveTo(256, 380); ctx.quadraticCurveTo(200, 310, 140, 260);
+  ctx.moveTo(256, 340); ctx.quadraticCurveTo(310, 270, 380, 220);
+  ctx.moveTo(256, 260); ctx.quadraticCurveTo(190, 200, 130, 150);
+  ctx.moveTo(256, 210); ctx.quadraticCurveTo(320, 160, 390, 100);
+  ctx.stroke();
+
+  // Natural sprays of anime leaves
+  const sprays = [
+    // Top central fan
+    { x: 256, y: 150, leaves: [
+      { a: 0.0,   l: 115, w: 36, c: '#48ba36', h: '#c0f44e' },
+      { a: -0.38, l: 100, w: 32, c: '#3da82e', h: '#a8eb42' },
+      { a:  0.38, l: 100, w: 32, c: '#52c63e', h: '#caf854' },
+      { a: -0.76, l: 85,  w: 28, c: '#329624', h: '#92e034' },
+      { a:  0.76, l: 85,  w: 28, c: '#46b634', h: '#b8f046' },
+      { a: -1.14, l: 70,  w: 24, c: '#28841c', h: '#7ecf2a' },
+      { a:  1.14, l: 70,  w: 24, c: '#3da82e', h: '#a8eb42' },
+    ]},
+    // Upper left spray
+    { x: 140, y: 150, leaves: [
+      { a: -0.65, l: 100, w: 32, c: '#3da82e', h: '#a4eb40' },
+      { a: -0.25, l: 90,  w: 29, c: '#4aba38', h: '#bcf24c' },
+      { a: -1.05, l: 82,  w: 27, c: '#2e9222', h: '#88da30' },
+      { a: -1.45, l: 68,  w: 23, c: '#247a18', h: '#70c624' },
+      { a:  0.15, l: 80,  w: 26, c: '#44b032', h: '#b0ee44' },
+    ]},
+    // Upper right spray
+    { x: 380, y: 110, leaves: [
+      { a:  0.65, l: 105, w: 34, c: '#54c640', h: '#cff856' },
+      { a:  0.25, l: 92,  w: 30, c: '#46b634', h: '#b6ee48' },
+      { a:  1.05, l: 85,  w: 27, c: '#3ca62e', h: '#9ee63c' },
+      { a:  1.45, l: 70,  w: 24, c: '#309424', h: '#8ad832' },
+      { a: -0.15, l: 80,  w: 26, c: '#42ad30', h: '#ace840' },
+    ]},
+    // Lower left spray
+    { x: 145, y: 270, leaves: [
+      { a: -0.85, l: 95,  w: 31, c: '#369a28', h: '#96de36' },
+      { a: -0.45, l: 88,  w: 28, c: '#44b034', h: '#aced44' },
+      { a: -1.25, l: 78,  w: 25, c: '#2a861e', h: '#7ed02c' },
+      { a: -1.65, l: 62,  w: 22, c: '#207016', h: '#68be20' },
+      { a:  0.0,  l: 78,  w: 26, c: '#4ebe3a', h: '#bff452' },
+    ]},
+    // Lower right spray
+    { x: 375, y: 230, leaves: [
+      { a:  0.85, l: 96,  w: 32, c: '#4eba3c', h: '#bff452' },
+      { a:  0.45, l: 88,  w: 29, c: '#40a830', h: '#a6e840' },
+      { a:  1.25, l: 80,  w: 26, c: '#349a26', h: '#92dc34' },
+      { a:  1.65, l: 64,  w: 22, c: '#28841c', h: '#7aca28' },
+      { a:  0.05, l: 78,  w: 26, c: '#44b034', h: '#aced44' },
+    ]}
+  ];
+
+  sprays.forEach(s => {
+    s.leaves.forEach(l => {
+      drawAnimeLeaf(s.x, s.y, l.l, l.w, l.a, l.c, l.h);
+    });
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const genshinLeafTexture = createGenshinLeafTexture();
+
 // ─── GENSHIN IMPACT TREE GENERATOR ────────────────────────
 class TreeGenerator {
   constructor() {
@@ -1057,6 +1172,36 @@ class TreeGenerator {
     this.trunkMesh.castShadow = true;
     this.trunkMesh.receiveShadow = true;
     this.trunkMesh.frustumCulled = false;
+
+    // Dynamic Shadow: Trunk depth material tracks growth and wind sway
+    const trunkDepthMat = new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking
+    });
+    trunkDepthMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = mat.uniforms.uTime;
+      shader.uniforms.uGrowth = mat.uniforms.uGrowth;
+      shader.vertexShader = `
+        attribute vec3 branchStart;
+        attribute float growthOrder;
+        uniform float uTime;
+        uniform float uGrowth;
+      ` + shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `
+        vec3 pos = position;
+        float gp = clamp((uGrowth - growthOrder * 0.55) / 0.3, 0.0, 1.0);
+        gp = smoothstep(0.0, 1.0, gp);
+        pos = mix(branchStart, pos, gp);
+
+        float sway = sin(uTime * 1.5 + pos.y * 0.3 + branchStart.x) * 0.015 * pow(max(0.0, pos.y), 1.3) * gp;
+        pos.x += sway;
+        pos.z += cos(uTime * 1.2 + pos.y * 0.3 + branchStart.z) * 0.012 * pow(max(0.0, pos.y), 1.3) * gp;
+
+        vec3 transformed = pos;
+        `
+      );
+    };
+    this.trunkMesh.customDepthMaterial = trunkDepthMat;
     scene.add(this.trunkMesh);
   }
 
@@ -1155,14 +1300,16 @@ class TreeGenerator {
 
     this.leafTris = indices.length / 3;
 
-    // Genshin Impact Volumetric Foliage Cel-Shader
+    // Genshin Impact Volumetric Foliage Cel-Shader with Stylized Texture
     const mat = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
       transparent: true,
-      alphaTest: 0.18,
+      alphaTest: 0.22,
       uniforms: {
         uTime: { value: 0 },
         uGrowth: { value: 0 },
+        uLeafTexture: { value: genshinLeafTexture },
+        uSunPosition: { value: new THREE.Vector3(40, 60, 30) },
       },
       vertexShader: `
         attribute vec3 clumpCenter;
@@ -1203,6 +1350,8 @@ class TreeGenerator {
         }
       `,
       fragmentShader: `
+        uniform sampler2D uLeafTexture;
+        uniform vec3 uSunPosition;
         varying vec2 vUv;
         varying vec3 vNormal;
         varying vec3 vWorldPos;
@@ -1210,34 +1359,25 @@ class TreeGenerator {
         varying float vAlphaFactor;
 
         void main() {
-          if (vAlphaFactor < 0.01) discard;
+          if (vAlphaFactor < 0.02) discard;
 
-          // Procedural anime leaf cluster silhouette
-          vec2 p = vUv * 2.0 - 1.0;
-          float dist = length(p);
-          float angle = atan(p.y, p.x);
-          float lobes = sin(angle * 5.0) * 0.14 + cos(angle * 3.0 + 1.0) * 0.09;
-          float radius = 0.80 + lobes;
-          float alpha = smoothstep(radius, radius - 0.12, dist) * vAlphaFactor;
-          if (alpha < 0.18) discard;
+          vec4 texColor = texture2D(uLeafTexture, vUv);
+          if (texColor.a < 0.25) discard;
 
           vec3 normal = normalize(vNormal);
-          vec3 sunDir = normalize(vec3(40.0, 60.0, 30.0));
+          vec3 sunDir = normalize(uSunPosition - vWorldPos);
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
 
           float NdotL = dot(normal, sunDir);
 
           // Genshin 3-band stylized color ramp
-          float ramp = smoothstep(-0.25, 0.35, NdotL);
-          float sunHighlight = smoothstep(0.40, 0.75, NdotL);
+          float ramp = smoothstep(-0.20, 0.25, NdotL);
+          float sunHighlight = smoothstep(0.35, 0.65, NdotL);
 
-          // Rich Mondstadt anime palette:
-          // Shadow: cool deep jade
-          vec3 colShadow = vec3(0.09, 0.30, 0.18);
-          // Midtone: vibrant lush emerald
-          vec3 colMid    = vec3(0.28, 0.68, 0.22);
-          // Sunlit: radiant golden chartreuse
-          vec3 colLight  = vec3(0.72, 0.92, 0.26);
+          // Rich Mondstadt anime palette driven by leaf sprig texture:
+          vec3 colShadow = texColor.rgb * vec3(0.50, 0.68, 0.60) * 0.65;
+          vec3 colMid    = texColor.rgb * 1.05;
+          vec3 colLight  = texColor.rgb * vec3(1.22, 1.30, 0.85);
 
           // Sun kissed crown gradient
           colLight += vec3(0.08, 0.06, -0.05) * vHeightGradient;
@@ -1247,16 +1387,13 @@ class TreeGenerator {
 
           // Subsurface scattering (Backlight glow through foliage)
           float sss = pow(clamp(dot(viewDir, -sunDir), 0.0, 1.0), 3.0);
-          col += vec3(0.85, 0.95, 0.30) * sss * 0.65;
+          col += vec3(0.85, 0.95, 0.30) * sss * 0.55 * (1.0 - ramp * 0.4);
 
           // Anime fresnel rim light
           float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
-          col += vec3(0.5, 0.85, 0.3) * rim * 0.4;
+          col += vec3(0.5, 0.85, 0.3) * rim * 0.35;
 
-          // Inner clump ambient occlusion
-          col *= (0.7 + 0.3 * smoothstep(0.0, 0.8, dist));
-
-          gl_FragColor = vec4(col, alpha);
+          gl_FragColor = vec4(col, texColor.a * vAlphaFactor);
         }
       `
     });
@@ -1266,6 +1403,56 @@ class TreeGenerator {
     this.leafGroup.castShadow = true;
     this.leafGroup.receiveShadow = true;
     this.leafGroup.frustumCulled = false;
+
+    // Dynamic Leaf Shadow: Depth material tracks growth, wind flutter, and anime leaf cutout
+    const leafDepthMat = new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking,
+      side: THREE.DoubleSide
+    });
+    leafDepthMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = mat.uniforms.uTime;
+      shader.uniforms.uGrowth = mat.uniforms.uGrowth;
+      shader.uniforms.uLeafTexture = { value: genshinLeafTexture };
+      shader.vertexShader = `
+        attribute vec3 clumpCenter;
+        attribute float clumpOrder;
+        attribute float cardIdx;
+        uniform float uTime;
+        uniform float uGrowth;
+        varying vec2 vLeafUv;
+        varying float vAlphaFact;
+      ` + shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `
+        vLeafUv = uv;
+        float gp = clamp((uGrowth - (0.30 + clumpOrder * 0.45)) / 0.22, 0.0, 1.0);
+        gp = smoothstep(0.0, 1.0, gp);
+        vAlphaFact = gp;
+
+        vec3 pos = mix(clumpCenter, position, gp);
+        float wind = sin(uTime * 2.2 + clumpCenter.x * 0.7 + clumpCenter.z * 0.7) * 0.16;
+        float flutter = sin(uTime * 4.5 + cardIdx * 6.28) * 0.04;
+        pos.x += (wind + flutter) * gp;
+        pos.z += (wind * 0.7 + flutter) * gp;
+
+        vec3 transformed = pos;
+        `
+      );
+      shader.fragmentShader = `
+        uniform sampler2D uLeafTexture;
+        varying vec2 vLeafUv;
+        varying float vAlphaFact;
+      ` + shader.fragmentShader.replace(
+        '#include <clipping_planes_fragment>',
+        `
+        #include <clipping_planes_fragment>
+        if (vAlphaFact < 0.05) discard;
+        float a = texture2D(uLeafTexture, vLeafUv).a;
+        if (a < 0.30) discard;
+        `
+      );
+    };
+    this.leafGroup.customDepthMaterial = leafDepthMat;
     scene.add(this.leafGroup);
   }
 
@@ -1277,6 +1464,9 @@ class TreeGenerator {
     if (this.leafGroup) {
       this.leafGroup.material.uniforms.uTime.value = time;
       this.leafGroup.material.uniforms.uGrowth.value = growth;
+      if (this.leafGroup.material.uniforms.uSunPosition) {
+        this.leafGroup.material.uniforms.uSunPosition.value.copy(sunLight.position);
+      }
     }
   }
 }
@@ -1322,6 +1512,7 @@ function createParticles() {
     depthWrite: false,
     uniforms: {
       uTime: { value: 0 },
+      uGrowth: { value: 0 },
       uPixelRatio: { value: renderer.getPixelRatio() },
     },
     vertexShader: `
@@ -1331,6 +1522,7 @@ function createParticles() {
       attribute vec3 colorVal;
 
       uniform float uTime;
+      uniform float uGrowth;
       uniform float uPixelRatio;
 
       varying vec3 vColor;
@@ -1338,6 +1530,9 @@ function createParticles() {
       varying float vRot;
 
       void main() {
+        // Petals only appear and fall after tree develops foliage (growth > 0.40)
+        float foliageActive = smoothstep(0.40, 0.75, uGrowth);
+
         vec3 pos = position;
 
         // Spiral drifting descent from canopy
@@ -1349,12 +1544,12 @@ function createParticles() {
         pos.z += cos(swirl) * 1.3 + cos(uTime * 1.2 + phase) * 0.4;
 
         vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-        gl_PointSize = size * uPixelRatio * (60.0 / -mvPosition.z);
-        gl_PointSize = clamp(gl_PointSize, 1.0, 16.0);
+        gl_PointSize = size * uPixelRatio * (60.0 / -mvPosition.z) * foliageActive;
+        gl_PointSize = clamp(gl_PointSize, 0.0, 16.0);
         gl_Position = projectionMatrix * mvPosition;
 
         vColor = colorVal;
-        vAlpha = smoothstep(0.0, 1.2, pos.y) * smoothstep(10.0, 8.5, pos.y) * 0.85;
+        vAlpha = smoothstep(0.0, 1.2, pos.y) * smoothstep(10.0, 8.5, pos.y) * 0.85 * foliageActive;
         vRot = uTime * 2.2 + phase;
       }
     `,
@@ -1632,13 +1827,25 @@ function animate(now) {
   // Update tree
   tree.update(now * 0.001, g);
 
-  // Update particles
+  // Update particles (only fall once foliage exists)
   particles.material.uniforms.uTime.value = now * 0.001;
+  particles.material.uniforms.uGrowth.value = g;
 
   // Update light rays
   lightRays.children.forEach(ray => {
     ray.material.uniforms.uTime.value = now * 0.001;
   });
+
+  // Dynamic Sun Arc: sun travels across sky as tree grows, making shadows crawl and stretch
+  const sunAngle = 0.60 + g * 0.90;
+  const sunHeight = 52.0 + Math.sin(g * Math.PI) * 14.0;
+  sunLight.position.set(
+    Math.cos(sunAngle) * 62.0,
+    sunHeight,
+    Math.sin(sunAngle) * 48.0
+  );
+  sunLight.target.position.set(0, 3.5, 0);
+  sunLight.target.updateMatrixWorld();
 
   // Update sun position based on growth (subtle sky color shift)
   const skyDome = scene.getObjectByName('skyDome');
