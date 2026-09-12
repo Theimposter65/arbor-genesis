@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arbor Genesis — 3D Tree Growth</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; }
+  canvas { display: block; }
+
+  #ui {
+    position: fixed; top: 20px; left: 20px; z-index: 100;
+    background: rgba(10, 10, 15, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 20px 24px;
+    color: #e0e0e0; min-width: 260px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  #ui h2 {
+    font-size: 18px; font-weight: 600; margin-bottom: 4px;
+    background: linear-gradient(135deg, #7ec850, #4a9e2e);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  #ui .subtitle { font-size: 11px; color: #888; margin-bottom: 16px; letter-spacing: 1px; text-transform: uppercase; }
+
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 13px; font-weight: 600; color: #c8e6a0; font-variant-numeric: tabular-nums; }
+
+  #timeline {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    z-index: 100; width: min(600px, 80vw);
+    background: rgba(10, 10, 15, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 16px 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  #timeline .bar-bg {
+    width: 100%; height: 6px; background: rgba(255,255,255,0.08);
+    border-radius: 3px; cursor: pointer; position: relative;
+  }
+  #timeline .bar-fill {
+    height: 100%; border-radius: 3px; width: 0%;
+    background: linear-gradient(90deg, #4a9e2e, #7ec850, #c8e6a0);
+    transition: width 0.1s linear;
+  }
+  #timeline .time-display {
+    display: flex; justify-content: space-between; margin-top: 8px;
+    font-size: 11px; color: #777; font-variant-numeric: tabular-nums;
+  }
+  #timeline .controls {
+    display: flex; gap: 8px; margin-top: 10px; justify-content: center;
+  }
+  #timeline button {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: #ccc; border-radius: 8px; padding: 6px 14px; font-size: 12px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  #timeline button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  #timeline button.active { background: rgba(78, 158, 46, 0.3); border-color: rgba(126,200,80,0.4); color: #7ec850; }
+
+  #loading {
+    position: fixed; inset: 0; z-index: 999;
+    background: #0a0a0f;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: opacity 1s ease;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+  #loading h1 {
+    font-size: 36px; font-weight: 200; letter-spacing: 8px; text-transform: uppercase;
+    background: linear-gradient(135deg, #7ec850, #4a9e2e);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+  }
+  #loading .spinner {
+    width: 40px; height: 40px; border: 2px solid rgba(126,200,80,0.15);
+    border-top-color: #7ec850; border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  #loading p { margin-top: 16px; font-size: 12px; color: #666; letter-spacing: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #hint {
+    position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: rgba(255,255,255,0.3); letter-spacing: 1px;
+    pointer-events: none; z-index: 50;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h1>Arbor Genesis</h1>
+  <div class="spinner"></div>
+  <p>GENERATING ECOSYSTEM</p>
+</div>
+
+<div id="ui">
+  <h2>Arbor Genesis</h2>
+  <div class="subtitle">Real-time Growth Simulation</div>
+  <div class="stat-row">
+    <span class="stat-label">Elapsed</span>
+    <span class="stat-value" id="stat-time">0:00 / 3:00</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Growth Stage</span>
+    <span class="stat-value" id="stat-stage">Seedling</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Height</span>
+    <span class="stat-value" id="stat-height">0.0 m</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Branches</span>
+    <span class="stat-value" id="stat-branches">0</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Leaves</span>
+    <span class="stat-value" id="stat-leaves">0</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Grass Blades</span>
+    <span class="stat-value" id="stat-grass">0</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">Wind Speed</span>
+    <span class="stat-value" id="stat-wind">0.0 m/s</span>
+  </div>
+  <div class="stat-row">
+    <span class="stat-label">FPS</span>
+    <span class="stat-value" id="stat-fps">60</span>
+  </div>
+</div>
+
+<div id="timeline">
+  <div class="bar-bg" id="timeline-bar">
+    <div class="bar-fill" id="timeline-fill"></div>
+  </div>
+  <div class="time-display">
+    <span id="time-current">0:00</span>
+    <span id="time-total">3:00</span>
+  </div>
+  <div class="controls">
+    <button id="btn-slower" title="Slower">&#x275A;&#x275A;</button>
+    <button id="btn-slower2" title="Slow">&#x275A;&#x25B6;</button>
+    <button id="btn-play" class="active" title="Play">&#x25B6;</button>
+    <button id="btn-faster" title="Fast">&#x25B6;&#x275A;</button>
+    <button id="btn-fastest" title="Faster">&#x25B6;&#x275A;&#x25B6;</button>
+    <button id="btn-reset" title="Reset">&#x21BB;</button>
+  </div>
+</div>
+
+<div id="hint">Drag to orbit &bull; Scroll to zoom</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+// ─── IMPORTS ───────────────────────────────────────────────
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+
+// ─── SIMPLEX NOISE ─────────────────────────────────────────
+class SimplexNoise {
+  constructor(seed = Math.random()) {
+    this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+    this.p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) this.p[i] = i;
+    let s = seed * 2147483647;
+    for (let i = 255; i > 0; i--) {
+      s = (s * 16807) % 2147483647;
+      const j = s % (i + 1);
+      [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
+    }
+    this.perm = new Uint8Array(512);
+    for (let i = 0; i < 512; i++) this.perm[i] = this.p[i & 255];
+  }
+  noise3D(x, y, z) {
+    const F3 = 1/3, G3 = 1/6;
+    const s = (x+y+z)*F3;
+    const i = Math.floor(x+s), j = Math.floor(y+s), k = Math.floor(z+s);
+    const t = (i+j+k)*G3;
+    const X0 = i-t, Y0 = j-t, Z0 = k-t;
+    const x0 = x-X0, y0 = y-Y0, z0 = z-Z0;
+    let i1,j1,k1,i2,j2,k2;
+    if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}
+    const x1=x0-i1+G3,y1=y0-j1+G3,z1=z0-k1+G3;
+    const x2=x0-i2+2*G3,y2=y0-j2+2*G3,z2=z0-k2+2*G3;
+    const x3=x0-1+3*G3,y3=y0-1+3*G3,z3=z0-1+3*G3;
+    const ii=i&255,jj=j&255,kk=k&255;
+    const gi0=this.perm[ii+this.perm[jj+this.perm[kk]]]%12;
+    const gi1=this.perm[ii+i1+this.perm[jj+j1+this.perm[kk+k1]]]%12;
+    const gi2=this.perm[ii+i2+this.perm[jj+j2+this.perm[kk+k2]]]%12;
+    const gi3=this.perm[ii+1+this.perm[jj+1+this.perm[kk+1]]]%12;
+    let n0=0,n1=0,n2=0,n3=0;
+    let t0=0.6-x0*x0-y0*y0-z0*z0; if(t0>0){t0*=t0;n0=t0*t0*(this.grad3[gi0][0]*x0+this.grad3[gi0][1]*y0+this.grad3[gi0][2]*z0);}
+    let t1=0.6-x1*x1-y1*y1-z1*z1; if(t1>0){t1*=t1;n1=t1*t1*(this.grad3[gi1][0]*x1+this.grad3[gi1][1]*y1+this.grad3[gi1][2]*z1);}
+    let t2=0.6-x2*x2-y2*y2-z2*z2; if(t2>0){t2*=t2;n2=t2*t2*(this.grad3[gi2][0]*x2+this.grad3[gi2][1]*y2+this.grad3[gi2][2]*z2);}
+    let t3=0.6-x3*x3-y3*y3-z3*z3; if(t3>0){t3*=t3;n3=t3*t3*(this.grad3[gi3][0]*x3+this.grad3[gi3][1]*y3+this.grad3[gi3][2]*z3);}
+    return 32*(n0+n1+n2+n3);
+  }
+}
+const noise = new SimplexNoise(42);
+
+// ─── CONFIGURATION ────────────────────────────────────────
+const GROWTH_DURATION = 180; // 3 minutes in seconds
+const GROWTH_PHASES = [
+  { time: 0.00, label: 'Seedling',  height: 0.05 },
+  { time: 0.05, label: 'Sprouting', height: 0.1 },
+  { time: 0.12, label: 'Sapling',   height: 0.3 },
+  { time: 0.25, label: 'Growing',   height: 0.6 },
+  { time: 0.45, label: 'Maturing',  height: 0.8 },
+  { time: 0.70, label: 'Flowering', height: 0.92 },
+  { time: 0.88, label: 'Fruiting',  height: 0.97 },
+  { time: 1.00, label: 'Full Tree',  height: 1.0 },
+];
+
+// ─── SCENE SETUP ──────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x87CEEB, 0.0008);
+scene.background = new THREE.Color(0x87CEEB);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(8, 4, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 2.5, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance = 3;
+controls.maxDistance = 50;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.3;
+controls.update();
+
+// ─── LIGHTING ──────────────────────────────────────���──────
+// Sun (directional) — main light
+const sunLight = new THREE.DirectionalLight(0xFFF8E7, 1.8);
+sunLight.position.set(50, 80, 30);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 200;
+sunLight.shadow.camera.left = -25;
+sunLight.shadow.camera.right = 25;
+sunLight.shadow.camera.top = 25;
+sunLight.shadow.camera.bottom = -5;
+sunLight.shadow.bias = -0.001;
+sunLight.shadow.normalBias = 0.02;
+scene.add(sunLight);
+
+// Hemisphere light — sky/ground
+const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x5a7a3a, 0.6);
+scene.add(hemiLight);
+
+// Ambient fill
+const ambientLight = new THREE.AmbientLight(0x404060, 0.25);
+scene.add(ambientLight);
+
+// Point lights — warm accents
+const pointLight1 = new THREE.PointLight(0xFFE4B5, 0.5, 20);
+pointLight1.position.set(-5, 3, -3);
+scene.add(pointLight1);
+
+// ─── SKY DOME ─────────────────────────────────────────────
+function createSkyDome() {
+  const geo = new THREE.SphereGeometry(500, 32, 32);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: {
+      uTime: { value: 0 }
+    },
+    vertexShader: `
+      varying vec3 vWorldPos;
+      void main() {
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vWorldPos;
+      uniform float uTime;
+      void main() {
+        float h = normalize(vWorldPos).y;
+        // Sky gradient
+        vec3 topColor = vec3(0.15, 0.35, 0.75);
+        vec3 midColor = vec3(0.45, 0.65, 0.85);
+        vec3 horizonColor = vec3(0.75, 0.82, 0.88);
+        vec3 groundColor = vec3(0.35, 0.45, 0.30);
+
+        vec3 col;
+        if (h > 0.0) {
+          float t1 = smoothstep(0.0, 0.3, h);
+          float t2 = smoothstep(0.3, 0.8, h);
+          col = mix(horizonColor, midColor, t1);
+          col = mix(col, topColor, t2);
+        } else {
+          col = mix(horizonColor, groundColor, smoothstep(0.0, -0.3, h));
+        }
+
+        // Sun glow
+        vec3 sunDir = normalize(vec3(50.0, 80.0, 30.0));
+        float sunDot = max(dot(normalize(vWorldPos), sunDir), 0.0);
+        col += vec3(1.0, 0.95, 0.8) * pow(sunDot, 64.0) * 2.0;
+        col += vec3(1.0, 0.8, 0.5) * pow(sunDot, 8.0) * 0.3;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `
+  });
+  const sky = new THREE.Mesh(geo, mat);
+  sky.name = 'skyDome';
+  scene.add(sky);
+}
+createSkyDome();
+
+// ─── GROUND ───────────────────────────────────────────────
+function createGround() {
+  // Multi-layer ground with normal variation
+  const geo = new THREE.PlaneGeometry(120, 120, 200, 200);
+  const positions = geo.attributes.position;
+
+  // Displace vertices for terrain variation
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const y = positions.getY(i);
+    const dist = Math.sqrt(x * x + y * y);
+    let h = 0;
+    h += noise.noise3D(x * 0.05, y * 0.05, 0) * 0.5;
+    h += noise.noise3D(x * 0.15, y * 0.15, 1) * 0.15;
+    // Gentle depression around center
+    h -= Math.max(0, 2.5 - dist) * 0.1;
+    positions.setZ(i, h);
+  }
+  geo.computeVertexNormals();
+
+  // PBR ground material
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x5a7a3a,
+    roughness: 0.95,
+    metalness: 0.0,
+    flatShading: false,
+  });
+
+  // Add subtle color variation
+  const colors = new Float32Array(positions.count * 3);
+  for (let i = 0; i < positions.count; i++) {
+    const n = noise.noise3D(positions.getX(i) * 0.3, positions.getY(i) * 0.3, 2);
+    const r = 0.25 + n * 0.05 + 0.1;
+    const g = 0.40 + n * 0.06 + 0.12;
+    const b = 0.15 + n * 0.03;
+    colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  mat.vertexColors = true;
+
+  const ground = new THREE.Mesh(geo, mat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  ground.name = 'ground';
+  scene.add(ground);
+
+  // Subtle rock / dirt patches
+  for (let i = 0; i < 40; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 3 + Math.random() * 30;
+    const rockGeo = new THREE.SphereGeometry(0.1 + Math.random() * 0.4, 6, 4);
+    const rockMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0.35 + Math.random()*0.1, 0.3 + Math.random()*0.08, 0.2 + Math.random()*0.06),
+      roughness: 0.9, metalness: 0.05
+    });
+    const rock = new THREE.Mesh(rockGeo, rockMat);
+    rock.position.set(Math.cos(angle) * dist, -0.15 + Math.random() * 0.1, Math.sin(angle) * dist);
+    rock.rotation.set(Math.random() * 0.3, Math.random() * Math.PI * 2, Math.random() * 0.3);
+    rock.scale.set(1, 0.4 + Math.random() * 0.4, 1);
+    rock.receiveShadow = true;
+    rock.castShadow = true;
+    scene.add(rock);
+  }
+}
+createGround();
+
+// ─── GRASS SYSTEM ─────────────────────────────────────────
+function createGrassField() {
+  const bladeCount = 150000;
+  const spreadRadius = 40;
+  const trunkPos = new THREE.Vector3(0, 0, 0);
+
+  // Custom shader material for grass
+  const grassMaterial = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    transparent: true,
+    alphaTest: 0.3,
+    uniforms: {
+      uTime: { value: 0 },
+      uWindStrength: { value: 0.0 },
+      uGrowth: { value: 0.0 },
+    },
+    vertexShader: `
+      attribute vec3 offset;
+      attribute float scale;
+      attribute float phase;
+      attribute vec3 colorVal;
+
+      uniform float uTime;
+      uniform float uWindStrength;
+      uniform float uGrowth;
+
+      varying vec3 vColor;
+      varying float vShade;
+      varying vec2 vUv;
+
+      // Simplex noise for wind
+      vec3 mod289(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+      vec4 mod289(vec4 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+      vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+      vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+      float snoise(vec3 v) {
+        const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+        vec3 i  = floor(v + dot(v, C.yyy));
+        vec3 x0 = v - i + dot(i, C.xxx);
+        vec3 g = step(x0.yzx, x0.xyz);
+        vec3 l = 1.0 - g;
+        vec3 i1 = min(g.xyz, l.zxy);
+        vec3 i2 = max(g.xyz, l.zxy);
+        vec3 x1 = x0 - i1 + C.xxx;
+        vec3 x2 = x0 - i2 + C.yyy;
+        vec3 x3 = x0 - D.yyy;
+        i = mod289(i);
+        vec4 p = permute(permute(permute(
+          i.z + vec4(0.0, i1.z, i2.z, 1.0))
+          + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+          + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+        float n_ = 0.142857142857;
+        vec3 ns = n_ * D.wyz - D.xzx;
+        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+        vec4 x_ = floor(j * ns.z);
+        vec4 y_ = floor(j - 7.0 * x_);
+        vec4 x = x_ * ns.x + ns.yyyy;
+        vec4 y = y_ * ns.x + ns.yyyy;
+        vec4 h = 1.0 - abs(x) - abs(y);
+        vec4 b0 = vec4(x.xy, y.xy);
+        vec4 b1 = vec4(x.zw, y.zw);
+        vec4 s0 = floor(b0)*2.0 + 1.0;
+        vec4 s1 = floor(b1)*2.0 + 1.0;
+        vec4 sh = -step(h, vec4(0.0));
+        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+        vec3 p0 = vec3(a0.xy, h.x);
+        vec3 p1 = vec3(a0.zw, h.y);
+        vec3 p2 = vec3(a1.xy, h.z);
+        vec3 p3 = vec3(a1.zw, h.w);
+        vec4 norm = taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+        vec4 m = max(0.6 - vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)), 0.0);
+        m = m * m;
+        return 42.0 * dot(m*m, vec4(dot(p0*norm.x,x0),dot(p1*norm.y,x1),dot(p2*norm.z,x2),dot(p3*norm.w,x3)));
+      }
+
+      void main() {
+        vUv = uv;
+        vColor = colorVal;
+
+        vec3 pos = position;
+        float bladeHeight = pos.y * scale;
+        float growthFactor = uGrowth;
+
+        // Position on ground
+        vec3 worldPos = offset;
+        float t = vUv.y * growthFactor;
+
+        // Height grows upward
+        pos.y *= scale * growthFactor;
+
+        // Wind displacement
+        vec3 noiseCoord = vec3(
+          offset.x * 0.15 + uTime * 0.3,
+          offset.z * 0.15 + uTime * 0.2,
+          phase * 6.28
+        );
+        float windNoise = snoise(noiseCoord) * 0.5 + 0.5;
+        float windNoise2 = snoise(noiseCoord + 100.0) * 0.5 + 0.5;
+
+        // Wind strength increases with height
+        float windEffect = t * uWindStrength;
+
+        // Horizontal displacement follows blade curve
+        pos.x += windNoise * windEffect * 0.8 * t;
+        pos.z += windNoise2 * windEffect * 0.6 * t;
+
+        // Subtle bend based on height
+        pos.x += sin(uTime * 1.5 + phase * 6.28) * growthFactor * 0.05 * t;
+        pos.z += cos(uTime * 1.2 + phase * 3.14) * growthFactor * 0.04 * t;
+
+        vec3 finalPos = worldPos + pos;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(finalPos, 1.0);
+
+        // Shading — darker at base
+        vShade = smoothstep(0.0, 0.5, vUv.y);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vShade;
+      varying vec2 vUv;
+
+      void main() {
+        float shade = 0.4 + 0.6 * vShade;
+        vec3 col = vColor * shade;
+
+        // Slight gradient — tips lighter
+        col += vec3(0.05, 0.08, 0.02) * vUv.y;
+
+        // Alpha based on tip
+        float alpha = smoothstep(1.0, 0.6, vUv.y) * 0.85;
+        if (alpha < 0.01) discard;
+
+        gl_FragColor = vec4(col, alpha);
+      }
+    `
+  });
+
+  // Build instanced grass geometry
+  const bladeGeo = new THREE.PlaneGeometry(0.08, 1, 1, 4);
+  // Bend the blade slightly
+  const bendPositions = bladeGeo.attributes.position;
+  for (let i = 0; i < bendPositions.count; i++) {
+    const x = bendPositions.getX(i);
+    const y = bendPositions.getY(i);
+    bendPositions.setX(i, x + y * y * 0.04);
+  }
+
+  const offsets = new Float32Array(bladeCount * 3);
+  const scales = new Float32Array(bladeCount);
+  const phases = new Float32Array(bladeCount);
+  const colorValues = new Float32Array(bladeCount * 3);
+
+  const trunkX = 0, trunkZ = 0;
+  const trunkRadius = 2.5; // exclusion zone around trunk
+
+  let placed = 0;
+  let attempts = 0;
+  const maxAttempts = bladeCount * 20;
+
+  while (placed < bladeCount && attempts < maxAttempts) {
+    attempts++;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.pow(Math.random(), 0.6) * spreadRadius;
+
+    let x = Math.cos(angle) * dist;
+    let z = Math.sin(angle) * dist;
+
+    // Check distance from trunk
+    const dx = x - trunkX, dz = z - trunkZ;
+    const trunkDist = Math.sqrt(dx*dx + dz*dz);
+
+    if (trunkDist < trunkRadius) continue;
+
+    // Ground height
+    const gh = noise.noise3D(x * 0.05, z * 0.05, 0) * 0.5
+             + noise.noise3D(x * 0.15, z * 0.15, 1) * 0.15
+             - Math.max(0, 2.5 - Math.sqrt(x*x + z*z)) * 0.1;
+
+    offsets[placed * 3]     = x;
+    offsets[placed * 3 + 1] = gh;
+    offsets[placed * 3 + 2] = z;
+
+    // Grass height varies with distance
+    const heightFalloff = Math.min(1, trunkDist / 3.0);
+    scales[placed] = (0.4 + Math.random() * 0.8) * (0.5 + heightFalloff * 0.5);
+    phases[placed] = Math.random();
+
+    // Color variation
+    const cn = noise.noise3D(x * 0.5, z * 0.5, 5);
+    const brightness = 0.15 + cn * 0.06 + Math.random() * 0.05;
+    const greenness = 0.35 + Math.random() * 0.12;
+    colorValues[placed * 3]     = brightness;
+    colorValues[placed * 3 + 1] = greenness + cn * 0.03;
+    colorValues[placed * 3 + 2] = brightness * 0.4;
+
+    placed++;
+  }
+
+  bladeGeo.setAttribute('offset', new THREE.BufferAttribute(offsets, 3));
+  bladeGeo.setAttribute('scale', new THREE.BufferAttribute(scales, 1));
+  bladeGeo.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
+  bladeGeo.setAttribute('colorVal', new THREE.BufferAttribute(colorValues, 3));
+
+  const grass = new THREE.InstancedMesh(bladeGeo, grassMaterial, placed);
+  grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+  // Hack to use ShaderMaterial with InstancedMesh — build a regular mesh
+  const instancedMesh = new THREE.InstancedMesh(bladeGeo, grassMaterial, placed);
+  instancedMesh.name = 'grass';
+  // Manually set instance matrices
+  const dummy = new THREE.Object3D();
+  const mergedGeo = new THREE.InstancedBufferGeometry();
+  mergedGeo.index = bladeGeo.index;
+  mergedGeo.attributes.position = bladeGeo.attributes.position;
+  mergedGeo.attributes.uv = bladeGeo.attributes.uv;
+  mergedGeo.attributes.normal = bladeGeo.attributes.normal;
+
+  // Actually let's use a merged approach via BufferGeometryUtils approach
+  // Instead, let's merge blade instances into one geometry
+  scene.remove(instancedMesh);
+
+  // Rebuild as merged geometry
+  const totalVerts = placed * bladeGeo.attributes.position.count;
+  const mergedPositions = new Float32Array(totalVerts * 3);
+  const mergedUvs = new Float32Array(totalVerts * 2);
+  const mergedColors = new Float32Array(totalVerts * 3);
+  const mergedOffsets = new Float32Array(totalVerts * 3);
+  const mergedScales = new Float32Array(totalVerts);
+  const mergedPhases = new Float32Array(totalVerts);
+
+  const srcPos = bladeGeo.attributes.position;
+  const srcUv = bladeGeo.attributes.uv;
+  const vertsPerBlade = srcPos.count;
+
+  for (let b = 0; b < placed; b++) {
+    const ox = offsets[b * 3], oy = offsets[b * 3 + 1], oz = offsets[b * 3 + 2];
+    const sc = scales[b], ph = phases[b];
+
+    for (let v = 0; v < vertsPerBlade; v++) {
+      const idx = b * vertsPerBlade + v;
+      mergedPositions[idx * 3]     = srcPos.getX(v);
+      mergedPositions[idx * 3 + 1] = srcPos.getY(v);
+      mergedPositions[idx * 3 + 2] = srcPos.getZ(v);
+      mergedUvs[idx * 2]     = srcUv.getX(v);
+      mergedUvs[idx * 2 + 1] = srcUv.getY(v);
+      mergedColors[idx * 3]     = colorValues[b * 3];
+      mergedColors[idx * 3 + 1] = colorValues[b * 3 + 1];
+      mergedColors[idx * 3 + 2] = colorValues[b * 3 + 2];
+      mergedOffsets[idx * 3]     = ox;
+      mergedOffsets[idx * 3 + 1] = oy;
+      mergedOffsets[idx * 3 + 2] = oz;
+      mergedScales[idx] = sc;
+      mergedPhases[idx] = ph;
+    }
+  }
+
+  const mergedGeo = new THREE.BufferGeometry();
+  mergedGeo.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
+  mergedGeo.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
+  mergedGeo.setAttribute('colorVal', new THREE.BufferAttribute(mergedColors, 3));
+  mergedGeo.setAttribute('offset', new THREE.BufferAttribute(mergedOffsets, 3));
+  mergedGeo.setAttribute('scale', new THREE.BufferAttribute(mergedScales, 1));
+  mergedGeo.setAttribute('phase', new THREE.BufferAttribute(mergedPhases, 1));
+  mergedGeo.computeVertexNormals();
+
+  const grassMesh = new THREE.Mesh(mergedGeo, grassMaterial);
+  grassMesh.name = 'grass';
+  grassMesh.frustumCulled = false;
+  grassMaterial.needsUpdate = true;
+  scene.add(grassMesh);
+
+  document.getElementById('stat-grass').textContent = placed.toLocaleString();
+
+  return { material: grassMaterial, mesh: grassMesh, count: placed };
+}
+
+const grassSystem = createGrassField();
+
+// ─── TREE GENERATION ──────────────────────────────────────
+class TreeGenerator {
+  constructor() {
+    this.branches = [];
+    this.leaves = [];
+    this.trunkMesh = null;
+    this.leafGroup = null;
+    this.maxHeight = 0;
+    this.branchCount = 0;
+    this.leafCount = 0;
+    this.trunkRadius = 0.22;
+    this.params = {};
+  }
+
+  // L-system inspired recursive branch generation
+  generateBranchData(startPos, direction, length, radius, depth, maxDepth, angleSpread, parentIndex = -1) {
+    if (depth > maxDepth || length < 0.02 || radius < 0.003) return [];
+
+    const segments = Math.max(2, Math.floor(length / 0.12));
+    const branchData = {
+      startPos: startPos.clone(),
+      endPos: startPos.clone().add(direction.clone().multiplyScalar(length)),
+      length,
+      radius,
+      depth,
+      segments,
+      parentIndex,
+      growOrder: this.branchCount,
+      children: [],
+      // Growth animation parameters
+      growDelay: depth * 0.04 + Math.random() * 0.02,
+      growDuration: 0.03 + Math.random() * 0.02,
+      // Physics
+      stiffness: 0.3 + depth * 0.15,
+      swayPhase: Math.random() * Math.PI * 2,
+      swayAmp: 0.002 + depth * 0.003,
+    };
+
+    const myIndex = this.branchCount;
+    if (parentIndex >= 0) {
+      this.branches[parentIndex].children.push(myIndex);
+    }
+
+    this.branches.push(branchData);
+    this.branchCount++;
+
+    // Sub-branches
+    if (depth < maxDepth) {
+      const numChildren = depth === 0 ? 3 : (Math.random() < 0.15 ? 3 : 2);
+      for (let i = 0; i < numChildren; i++) {
+        const t = (i + 1) / (numChildren + 1);
+        const branchPos = new THREE.Vector3().lerpVectors(startPos, branchData.endPos, t);
+
+        // Rotate direction with some variation
+        const perpAxis = new THREE.Vector3(1, 0, 0);
+        if (Math.abs(direction.dot(perpAxis)) > 0.9) perpAxis.set(0, 1, 0);
+        const rotAxis = new THREE.Vector3().crossVectors(direction, perpAxis).normalize();
+        const baseAngle = angleSpread * (0.7 + Math.random() * 0.6);
+        const azimuthAngle = (Math.PI * 2 / numChildren) * i + (Math.random() - 0.5) * 0.8;
+
+        const quat = new THREE.Quaternion().setFromAxisAngle(rotAxis, baseAngle);
+        const quatAzimuth = new THREE.Quaternion().setFromAxisAngle(direction, azimuthAngle);
+        const newDir = direction.clone().applyQuaternion(quat).applyQuaternion(quatAzimuth).normalize();
+
+        // Slight upward bias
+        newDir.y += 0.05 + Math.random() * 0.1;
+        newDir.normalize();
+
+        const childLength = length * (0.65 + Math.random() * 0.2);
+        const childRadius = radius * (0.55 + Math.random() * 0.15);
+
+        this.generateBranchData(
+          branchData.endPos, newDir, childLength, childRadius,
+          depth + 1, maxDepth, angleSpread * (0.75 + Math.random() * 0.15),
+          myIndex
+        );
+      }
+    }
+
+    return [branchData];
+  }
+
+  buildTree() {
+    // Clear old
+    if (this.trunkMesh) { scene.remove(this.trunkMesh); }
+    if (this.leafGroup) { scene.remove(this.leafGroup); }
+    this.branches = [];
+    this.leaves = [];
+    this.branchCount = 0;
+    this.leafCount = 0;
+
+    // Randomize tree parameters
+    this.params = {
+      maxDepth: 7,
+      trunkLength: 2.2 + Math.random() * 0.8,
+      trunkRadius: 0.18 + Math.random() * 0.08,
+      angleSpread: 0.55 + Math.random() * 0.25,
+      bendiness: 0.02 + Math.random() * 0.04,
+    };
+
+    // Slight trunk lean
+    const leanAngle = (Math.random() - 0.5) * 0.15;
+    const leanAxis = new THREE.Vector3(1, 0, 0);
+
+    // Start with trunk
+    const startPos = new THREE.Vector3(0, 0.05, 0);
+    const trunkDir = new THREE.Vector3(leanAngle, 1, 0).normalize();
+    this.generateBranchData(startPos, trunkDir, this.params.trunkLength, this.params.trunkRadius, 0, this.params.maxDepth, this.params.angleSpread);
+
+    // Build branch meshes — merged for performance
+    this.buildBranchMeshes();
+
+    // Generate leaves
+    this.generateLeaves();
+
+    // Compute max height
+    this.maxHeight = 0;
+    for (const b of this.branches) {
+      this.maxHeight = Math.max(this.maxHeight, b.endPos.y);
+    }
+
+    return {
+      branches: this.branchCount,
+      leaves: this.leafCount,
+      height: this.maxHeight,
+    };
+  }
+
+  buildBranchMeshes() {
+    // Merge all branch cylinders into one geometry
+    const branchGeometries = [];
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+    const colorAttr = [];
+    const growthAttr = [];
+    const swayPhaseAttr = [];
+    const swayAmpAttr = [];
+    const stiffnessAttr = [];
+    const branchIndexAttr = [];
+    const branchTAttr = [];
+
+    let vertexOffset = 0;
+
+    for (let b = 0; b < this.branches.length; b++) {
+      const branch = this.branches[b];
+      const segs = branch.segments;
+      const radialSegs = 8;
+
+      const start = branch.startPos;
+      const end = branch.endPos;
+      const dir = new THREE.Vector3().subVectors(end, start);
+      const len = dir.length();
+      dir.normalize();
+
+      // Create perpendicular frame
+      const up = Math.abs(dir.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+      const right = new THREE.Vector3().crossVectors(dir, up).normalize();
+      const forward = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+      // Radius profile — tapered
+      const depthRatio = branch.depth / this.params.maxDepth;
+      const baseR = branch.radius;
+
+      // Build cylinder vertices
+      for (let seg = 0; seg <= segs; seg++) {
+        const t = seg / segs;
+        const posOnBranch = new THREE.Vector3().lerpVectors(start, end, t);
+        const r = baseR * (1 - t * 0.85) * (1 - depthRatio * 0.3);
+
+        for (let rad = 0; rad <= radialSegs; rad++) {
+          const angle = (rad / radialSegs) * Math.PI * 2;
+          const cos = Math.cos(angle), sin = Math.sin(angle);
+          const nx = cos * right.x + sin * forward.x;
+          const ny = cos * right.y + sin * forward.y;
+          const nz = cos * right.z + sin * forward.z;
+
+          const px = posOnBranch.x + nx * r;
+          const py = posOnBranch.y + ny * r;
+          const pz = posOnBranch.z + nz * r;
+
+          positions.push(px, py, pz);
+          normals.push(nx, ny, nz);
+          uvs.push(t, angle / (Math.PI * 2));
+          growthAttr.push(branch.growOrder / this.branches.length);
+          swayPhaseAttr.push(branch.swayPhase);
+          swayAmpAttr.push(branch.swayAmp);
+          stiffnessAttr.push(branch.stiffness);
+          branchIndexAttr.push(b);
+          branchTAttr.push(t);
+
+          // Color — darker at base, lighter at tip
+          const roughness = 0.7 + depthRatio * 0.2;
+          const brownR = 0.22 + depthRatio * 0.05;
+          const brownG = 0.13 + depthRatio * 0.03;
+          const brownB = 0.05 + depthRatio * 0.02;
+          colorAttr.push(brownR, brownG, brownB);
+        }
+      }
+
+      // Indices
+      for (let seg = 0; seg < segs; seg++) {
+        for (let rad = 0; rad < radialSegs; rad++) {
+          const a = vertexOffset + seg * (radialSegs + 1) + rad;
+          const bIdx = a + 1;
+          const c = a + radialSegs + 1;
+          const d = c + 1;
+          indices.push(a, c, bIdx, bIdx, c, d);
+        }
+      }
+      vertexOffset += (segs + 1) * (radialSegs + 1);
+    }
+
+    if (positions.length === 0) return;
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('colorVal', new THREE.Float32BufferAttribute(colorAttr, 3));
+    geo.setAttribute('growthIdx', new THREE.Float32BufferAttribute(growthAttr, 1));
+    geo.setAttribute('swayPhase', new THREE.Float32BufferAttribute(swayPhaseAttr, 1));
+    geo.setAttribute('swayAmp', new THREE.Float32BufferAttribute(swayAmpAttr, 1));
+    geo.setAttribute('stiffness', new THREE.Float32BufferAttribute(stiffnessAttr, 1));
+    geo.setAttribute('branchIdx', new THREE.Float32BufferAttribute(branchIndexAttr, 1));
+    geo.setAttribute('branchT', new THREE.Float32BufferAttribute(branchTAttr, 1));
+    geo.setIndex(indices);
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uGrowth: { value: 0 },
+        uTotalBranches: { value: this.branches.length },
+      },
+      vertexShader: `
+        attribute float growthIdx;
+        attribute float swayPhase;
+        attribute float swayAmp;
+        attribute float stiffness;
+        attribute float branchIdx;
+        attribute float branchT;
+        attribute vec3 colorVal;
+
+        uniform float uTime;
+        uniform float uGrowth;
+        uniform float uTotalBranches;
+
+        varying vec3 vColor;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying float vAO;
+
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+        vec4 mod289(vec4 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+        vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+        float snoise(vec3 v) {
+          const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+          const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+          vec3 i  = floor(v + dot(v, C.yyy));
+          vec3 x0 = v - i + dot(i, C.xxx);
+          vec3 g = step(x0.yzx, x0.xyz);
+          vec3 l = 1.0 - g;
+          vec3 i1 = min(g.xyz, l.zxy);
+          vec3 i2 = max(g.xyz, l.zxy);
+          vec3 x1 = x0 - i1 + C.xxx;
+          vec3 x2 = x0 - i2 + C.yyy;
+          vec3 x3 = x0 - D.yyy;
+          i = mod289(i);
+          vec4 p = permute(permute(permute(
+            i.z + vec4(0.0, i1.z, i2.z, 1.0))
+            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+          float n_ = 0.142857142857;
+          vec3 ns = n_ * D.wyz - D.xzx;
+          vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+          vec4 x_ = floor(j * ns.z);
+          vec4 y_ = floor(j - 7.0 * x_);
+          vec4 x = x_ * ns.x + ns.yyyy;
+          vec4 y = y_ * ns.x + ns.yyyy;
+          vec4 h = 1.0 - abs(x) - abs(y);
+          vec4 b0 = vec4(x.xy, y.xy);
+          vec4 b1 = vec4(x.zw, y.zw);
+          vec4 s0 = floor(b0)*2.0 + 1.0;
+          vec4 s1 = floor(b1)*2.0 + 1.0;
+          vec4 sh = -step(h, vec4(0.0));
+          vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+          vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+          vec3 p0 = vec3(a0.xy, h.x);
+          vec3 p1 = vec3(a0.zw, h.y);
+          vec3 p2 = vec3(a1.xy, h.z);
+          vec3 p3 = vec3(a1.zw, h.w);
+          vec4 norm = taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+          vec4 m = max(0.6 - vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)), 0.0);
+          m = m * m;
+          return 42.0 * dot(m*m, vec4(dot(p0*norm.x,x0),dot(p1*norm.y,x1),dot(p2*norm.z,x2),dot(p3*norm.w,x3)));
+        }
+
+        void main() {
+          float growProgress = clamp((uGrowth - growthIdx * 0.9) / max(0.001, 1.0 - growthIdx * 0.9), 0.0, 1.0);
+          growProgress = smoothstep(0.0, 1.0, growProgress);
+
+          vec3 pos = position;
+          float t = branchT;
+
+          // Growth: scale branch from base to tip
+          float growthScale = smoothstep(0.0, 1.0, t * 2.0) * growProgress;
+          pos *= growthScale;
+
+          // Wind sway — uses sway attributes per branch
+          float windNoise = snoise(vec3(branchIdx * 0.1, uTime * 0.5 + swayPhase, 0.0));
+          float windNoise2 = snoise(vec3(branchIdx * 0.1 + 50.0, uTime * 0.4 + swayPhase, 0.0));
+
+          float swayAmount = swayAmp * growProgress;
+          // Wind increases with height on the branch
+          float heightFactor = pow(t, 1.5);
+          pos.x += windNoise * swayAmount * 3.0 * heightFactor * t;
+          pos.z += windNoise2 * swayAmount * 2.5 * heightFactor * t;
+          // Slight vertical oscillation
+          pos.y += sin(uTime * 1.3 + swayPhase) * swayAmount * 0.5 * t;
+
+          vColor = colorVal * (0.6 + 0.4 * growProgress);
+          vNormal = normalMatrix * normal;
+          vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
+
+          // Ambient occlusion approximation
+          vAO = 1.0 - t * 0.15 * growProgress;
+
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying float vAO;
+
+        void main() {
+          vec3 normal = normalize(vNormal);
+          vec3 lightDir = normalize(vec3(50.0, 80.0, 30.0));
+
+          // Diffuse
+          float diff = max(dot(normal, lightDir), 0.0);
+          diff = diff * 0.7 + 0.3; // Wrap lighting
+
+          // Specular (rough bark)
+          vec3 viewDir = normalize(cameraPosition - vWorldPos);
+          vec3 halfDir = normalize(lightDir + viewDir);
+          float spec = pow(max(dot(normal, halfDir), 0.0), 16.0) * 0.15;
+
+          // Subsurface scattering approximation
+          float sss = max(0.0, dot(-normal, lightDir)) * 0.1;
+
+          vec3 col = vColor * diff + vec3(0.3, 0.25, 0.15) * spec + vec3(0.4, 0.3, 0.15) * sss;
+          col *= vAO;
+
+          // Slight rim light
+          float rim = 1.0 - max(dot(normal, viewDir), 0.0);
+          col += vec3(0.05, 0.06, 0.03) * pow(rim, 3.0);
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    });
+
+    this.trunkMesh = new THREE.Mesh(geo, mat);
+    this.trunkMesh.name = 'treeBranches';
+    this.trunkMesh.castShadow = true;
+    this.trunkMesh.receiveShadow = true;
+    this.trunkMesh.frustumCulled = false;
+    scene.add(this.trunkMesh);
+  }
+
+  generateLeaves() {
+    // Generate leaves at branch tips
+    const leafPositions = [];
+    const leafColors = [];
+    const leafPhases = [];
+    const leafSizes = [];
+
+    for (const branch of this.branches) {
+      if (branch.depth < 3) continue;
+
+      const numLeaves = Math.floor(3 + Math.random() * 8);
+      for (let i = 0; i < numLeaves; i++) {
+        const t = 0.5 + Math.random() * 0.5;
+        const pos = new THREE.Vector3().lerpVectors(branch.startPos, branch.endPos, t);
+        // Add some spread
+        pos.x += (Math.random() - 0.5) * branch.radius * 8;
+        pos.y += (Math.random() - 0.5) * branch.radius * 6;
+        pos.z += (Math.random() - 0.5) * branch.radius * 8;
+
+        leafPositions.push(pos.x, pos.y, pos.z);
+
+        // Leaf color — rich green
+        const hue = 0.22 + Math.random() * 0.08;
+        const sat = 0.6 + Math.random() * 0.3;
+        const val = 0.2 + Math.random() * 0.2;
+        const c = new THREE.Color().setHSL(hue, sat, val);
+        leafColors.push(c.r, c.g, c.b);
+
+        leafPhases.push(Math.random() * Math.PI * 2);
+        leafSizes.push(0.08 + Math.random() * 0.15);
+      }
+    }
+
+    this.leafCount = leafPositions.length / 3;
+    document.getElementById('stat-leaves').textContent = this.leafCount;
+
+    if (leafPositions.length === 0) return;
+
+    const leafGeo = new THREE.BufferGeometry();
+    leafGeo.setAttribute('position', new THREE.Float32BufferAttribute(leafPositions, 3));
+    leafGeo.setAttribute('colorVal', new THREE.Float32BufferAttribute(leafColors, 3));
+    leafGeo.setAttribute('phase', new THREE.Float32BufferAttribute(leafPhases, 1));
+    leafGeo.setAttribute('size', new THREE.Float32BufferAttribute(leafSizes, 1));
+
+    // Add indices for triangles (each leaf is a small quad)
+    const quadIndices = [];
+    for (let i = 0; i < this.leafCount; i++) {
+      const base = i * 4;
+      quadIndices.push(base, base+1, base+2, base+1, base+3, base+2);
+    }
+
+    // Duplicate positions for quad
+    const quadPositions = new Float32Array(this.leafCount * 12);
+    const quadColors = new Float32Array(this.leafCount * 12);
+    const quadPhases = new Float32Array(this.leafCount * 4);
+    const quadUvs = new Float32Array(this.leafCount * 8);
+    const quadGrowth = new Float32Array(this.leafCount * 4);
+
+    for (let i = 0; i < this.leafCount; i++) {
+      const growthIdx = this.branches.length > 0 ? Math.random() : 0;
+      const px = leafPositions[i*3], py = leafPositions[i*3+1], pz = leafPositions[i*3+2];
+      const s = leafSizes[i];
+      const cr = leafColors[i*3], cg = leafColors[i*3+1], cb = leafColors[i*3+2];
+      const ph = leafPhases[i];
+
+      // Quad corners
+      const corners = [
+        [px - s*0.5, py, pz - s*0.3],
+        [px + s*0.5, py, pz - s*0.3],
+        [px - s*0.3, py + s*0.8, pz],
+        [px + s*0.3, py + s*0.8, pz],
+      ];
+
+      for (let c = 0; c < 4; c++) {
+        const vi = i * 4 + c;
+        quadPositions[vi * 3]     = corners[c][0];
+        quadPositions[vi * 3 + 1] = corners[c][1];
+        quadPositions[vi * 3 + 2] = corners[c][2];
+        quadColors[vi * 3]     = cr;
+        quadColors[vi * 3 + 1] = cg;
+        quadColors[vi * 3 + 2] = cb;
+        quadPhases[vi] = ph;
+        quadGrowth[vi] = growthIdx;
+        quadUvs[vi * 2]     = (c < 2) ? 0 : 1;
+        quadUvs[vi * 2 + 1] = (c % 2 === 0) ? 0 : 1;
+      }
+    }
+
+    leafGeo.setAttribute('position', new THREE.Float32BufferAttribute(quadPositions, 3));
+    leafGeo.setAttribute('colorVal', new THREE.Float32BufferAttribute(quadColors, 3));
+    leafGeo.setAttribute('phase', new THREE.Float32BufferAttribute(quadPhases, 1));
+    leafGeo.setAttribute('growthIdx', new THREE.Float32BufferAttribute(quadGrowth, 1));
+    leafGeo.setAttribute('uv', new THREE.Float32BufferAttribute(quadUvs, 2));
+    leafGeo.setIndex(quadIndices);
+    leafGeo.computeVertexNormals();
+
+    const leafMat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      transparent: true,
+      alphaTest: 0.1,
+      uniforms: {
+        uTime: { value: 0 },
+        uGrowth: { value: 0 },
+      },
+      vertexShader: `
+        attribute float growthIdx;
+        attribute float phase;
+        attribute vec3 colorVal;
+
+        uniform float uTime;
+        uniform float uGrowth;
+
+        varying vec3 vColor;
+        varying vec2 vUv;
+
+        void main() {
+          float gp = smoothstep(0.0, 1.0, uGrowth - growthIdx * 0.8);
+
+          vec3 pos = position;
+          // Scale from center
+          pos *= gp;
+
+          // Leaf flutter
+          pos.x += sin(uTime * 3.0 + phase) * 0.02 * gp;
+          pos.z += cos(uTime * 2.5 + phase * 1.3) * 0.02 * gp;
+          pos.y += sin(uTime * 2.0 + phase * 0.7) * 0.015 * gp;
+
+          vColor = colorVal;
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying vec2 vUv;
+
+        void main() {
+          vec3 col = vColor * 1.2;
+          col += vec3(0.02, 0.03, 0.01) * vUv.y;
+
+          // Soft edge
+          float edgeFade = 1.0 - abs(vUv.x - 0.5) * 2.0;
+          edgeFade *= 1.0 - abs(vUv.y - 0.5) * 2.0;
+          float alpha = edgeFade * 0.88;
+
+          if (alpha < 0.01) discard;
+          gl_FragColor = vec4(col, alpha);
+        }
+      `
+    });
+
+    this.leafGroup = new THREE.Mesh(leafGeo, leafMat);
+    this.leafGroup.name = 'leaves';
+    this.leafGroup.frustumCulled = false;
+    scene.add(this.leafGroup);
+  }
+
+  update(time, growth) {
+    if (this.trunkMesh) {
+      this.trunkMesh.material.uniforms.uTime.value = time;
+      this.trunkMesh.material.uniforms.uGrowth.value = growth;
+    }
+    if (this.leafGroup) {
+      this.leafGroup.material.uniforms.uTime.value = time;
+      this.leafGroup.material.uniforms.uGrowth.value = growth;
+    }
+  }
+}
+
+// ─── ATMOSPHERIC PARTICLES ────────────────────────────────
+function createParticles() {
+  const count = 3000;
+  const positions = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  const phases = new Float32Array(count);
+  const speeds = new Float32Array(count);
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3]     = (Math.random() - 0.5) * 60;
+    positions[i * 3 + 1] = Math.random() * 15 + 0.5;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+    sizes[i] = 0.5 + Math.random() * 2.0;
+    phases[i] = Math.random() * Math.PI * 2;
+    speeds[i] = 0.1 + Math.random() * 0.4;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+  geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
+  geo.setAttribute('speed', new THREE.Float32BufferAttribute(speeds, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uPixelRatio: { value: renderer.getPixelRatio() },
+    },
+    vertexShader: `
+      attribute float size;
+      attribute float phase;
+      attribute float speed;
+
+      uniform float uTime;
+      uniform float uPixelRatio;
+
+      varying float vAlpha;
+
+      void main() {
+        vec3 pos = position;
+        // Float upward and drift
+        pos.y = mod(pos.y + uTime * speed * 0.3, 16.0);
+        pos.x += sin(uTime * 0.5 + phase) * 1.5;
+        pos.z += cos(uTime * 0.4 + phase * 1.7) * 1.5;
+
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        gl_PointSize = size * uPixelRatio * (80.0 / -mvPosition.z);
+        gl_PointSize = clamp(gl_PointSize, 0.5, 8.0);
+        gl_Position = projectionMatrix * mvPosition;
+
+        vAlpha = 0.15 + 0.15 * sin(uTime * 2.0 + phase);
+      }
+    `,
+    fragmentShader: `
+      varying float vAlpha;
+
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        if (d > 0.5) discard;
+        float alpha = smoothstep(0.5, 0.1, d) * vAlpha;
+        gl_FragColor = vec4(1.0, 0.98, 0.9, alpha);
+      }
+    `
+  });
+
+  const particles = new THREE.Points(geo, mat);
+  particles.name = 'particles';
+  scene.add(particles);
+  return { mesh: particles, material: mat };
+}
+const particles = createParticles();
+
+// ─── LIGHT RAYS (Volumetric light beams) ──────────────────
+function createLightRays() {
+  const rayGroup = new THREE.Group();
+  rayGroup.name = 'lightRays';
+
+  for (let i = 0; i < 5; i++) {
+    const geo = new THREE.CylinderGeometry(0.3, 2.5, 20, 8, 1, true);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uOffset: { value: i * 1.3 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        uniform float uTime;
+        uniform float uOffset;
+        void main() {
+          float alpha = 0.015 + 0.005 * sin(uTime * 0.5 + uOffset);
+          alpha *= smoothstep(1.0, 0.3, vUv.y);
+          alpha *= 0.5 + 0.5 * sin(vUv.x * 3.14);
+          gl_FragColor = vec4(1.0, 0.95, 0.8, alpha);
+        }
+      `
+    });
+
+    const ray = new THREE.Mesh(geo, mat);
+    ray.position.set(10 + i * 4, 8, -10 + i * 3);
+    ray.rotation.z = (Math.random() - 0.5) * 0.3;
+    ray.rotation.y = Math.random() * Math.PI;
+    rayGroup.add(ray);
+  }
+
+  scene.add(rayGroup);
+  return rayGroup;
+}
+const lightRays = createLightRays();
+
+// ─── POST-PROCESSING ──────────────────────────────────────
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+// Bloom for atmosphere
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.4, // strength
+  0.6, // radius
+  0.85  // threshold
+);
+composer.addPass(bloomPass);
+
+// Custom color grading pass
+const colorGradingShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    varying vec2 vUv;
+
+    void main() {
+      vec4 col = texture2D(tDiffuse, vUv);
+
+      // Lift shadows slightly
+      col.rgb = mix(col.rgb, vec3(0.02, 0.03, 0.02), 0.05);
+
+      // Warm highlight
+      float lum = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+      col.rgb += vec3(0.02, 0.01, -0.01) * smoothstep(0.7, 1.0, lum);
+
+      // Subtle vignette
+      vec2 center = vUv - 0.5;
+      float vig = 1.0 - dot(center, center) * 0.5;
+      col.rgb *= vig;
+
+      // Film grain
+      float grain = fract(sin(dot(vUv * uTime, vec2(12.9898, 78.233))) * 43758.5453);
+      col.rgb += (grain - 0.5) * 0.015;
+
+      gl_FragColor = col;
+    }
+  `
+};
+
+const colorPass = new ShaderPass(colorGradingShader);
+composer.addPass(colorPass);
+
+// ─── TREE INSTANCE ────────────────────────────────────────
+const tree = new TreeGenerator();
+const treeStats = tree.buildTree();
+document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
+document.getElementById('stat-height').textContent = '0.0 m';
+document.getElementById('stat-stage').textContent = 'Seedling';
+
+// ─── PLAYBACK STATE ───────────────────────────────────────
+const state = {
+  growth: 0,
+  time: 0,
+  playing: true,
+  speed: 1.0,        // 1x = 180s for full growth
+  windBase: 0.3,
+  windVariation: 0,
+};
+
+function getWindStrength() {
+  // Wind varies over time using multiple noise octaves
+  const t = performance.now() * 0.001;
+  const n1 = noise.noise3D(t * 0.3, 0, 0) * 0.5 + 0.5;
+  const n2 = noise.noise3D(t * 0.1, 100, 0) * 0.5 + 0.5;
+  return state.windBase * (0.5 + n1 * 0.5 + n2 * 0.3);
+}
+
+function getGrowthStage(growth) {
+  for (let i = GROWTH_PHASES.length - 1; i >= 0; i--) {
+    if (growth >= GROWTH_PHASES[i].time) return GROWTH_PHASES[i];
+  }
+  return GROWTH_PHASES[0];
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ─── UI BINDINGS ──────────────────────────────────────────
+const btnPlay = document.getElementById('btn-play');
+const btnReset = document.getElementById('btn-reset');
+const timelineFill = document.getElementById('timeline-fill');
+const timelineBar = document.getElementById('timeline-bar');
+
+function setSpeed(speed, btnId) {
+  state.speed = speed;
+  document.querySelectorAll('#timeline button').forEach(b => b.classList.remove('active'));
+  document.getElementById(btnId).classList.add('active');
+}
+
+btnPlay.addEventListener('click', () => {
+  state.playing = !state.playing;
+  btnPlay.innerHTML = state.playing ? '&#x275A;&#x275A;' : '&#x25B6;';
+  btnPlay.classList.toggle('active', state.playing);
+});
+document.getElementById('btn-slower').addEventListener('click', () => setSpeed(0.25, 'btn-slower'));
+document.getElementById('btn-slower2').addEventListener('click', () => setSpeed(0.5, 'btn-slower2'));
+document.getElementById('btn-faster').addEventListener('click', () => setSpeed(2.0, 'btn-faster'));
+document.getElementById('btn-fastest').addEventListener('click', () => setSpeed(4.0, 'btn-fastest'));
+btnReset.addEventListener('click', () => {
+  state.growth = 0;
+  state.time = 0;
+  state.playing = true;
+  btnPlay.innerHTML = '&#x275A;&#x275A;';
+  btnPlay.classList.add('active');
+  setSpeed(1.0, 'btn-play');
+});
+
+timelineBar.addEventListener('click', (e) => {
+  const rect = timelineBar.getBoundingClientRect();
+  const fraction = (e.clientX - rect.left) / rect.width;
+  state.growth = Math.max(0, Math.min(1, fraction));
+});
+
+// ─── ANIMATION LOOP ───────────────────────────────────────
+let lastTime = performance.now();
+let frameCount = 0;
+let fpsTime = 0;
+
+function animate(now) {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min((now - lastTime) / 1000, 0.1); // cap delta
+  lastTime = now;
+
+  // FPS
+  frameCount++;
+  fpsTime += dt;
+  if (fpsTime >= 0.5) {
+    document.getElementById('stat-fps').textContent = Math.round(frameCount / fpsTime);
+    frameCount = 0;
+    fpsTime = 0;
+  }
+
+  // Growth
+  if (state.playing && state.growth < 1.0) {
+    state.time += dt;
+    state.growth = Math.min(1.0, state.growth + dt / (GROWTH_DURATION / state.speed));
+  }
+
+  const g = state.growth;
+  const elapsed = g * GROWTH_DURATION;
+  const wind = getWindStrength();
+
+  // Update grass
+  grassSystem.material.uniforms.uTime.value = now * 0.001;
+  grassSystem.material.uniforms.uGrowth.value = Math.min(g * 1.5, 1.0);
+  grassSystem.material.uniforms.uWindStrength.value = wind;
+
+  // Update tree
+  tree.update(now * 0.001, g);
+
+  // Update particles
+  particles.material.uniforms.uTime.value = now * 0.001;
+
+  // Update light rays
+  lightRays.children.forEach(ray => {
+    ray.material.uniforms.uTime.value = now * 0.001;
+  });
+
+  // Update sun position based on growth (subtle sky color shift)
+  const skyDome = scene.getObjectByName('skyDome');
+  if (skyDome) skyDome.material.uniforms.uTime.value = now * 0.001;
+
+  // Update fog density — clears as tree grows
+  scene.fog.density = 0.001 * (1 - g * 0.3);
+
+  // Bloom increases as scene fills with leaves
+  bloomPass.strength = 0.3 + g * 0.3;
+
+  // Wind exposure
+  sunLight.intensity = 1.8 + wind * 0.4;
+
+  // UI updates
+  const stage = getGrowthStage(g);
+  document.getElementById('stat-time').textContent = `${formatTime(elapsed)} / 3:00`;
+  document.getElementById('stat-stage').textContent = stage.label;
+  document.getElementById('stat-height').textContent = `${(tree.maxHeight * g).toFixed(1)} m`;
+  document.getElementById('stat-wind').textContent = `${wind.toFixed(1)} m/s`;
+  document.getElementById('time-current').textContent = formatTime(elapsed);
+  timelineFill.style.width = `${g * 100}%`;
+
+  // Controls
+  controls.update();
+
+  // Render
+  composer.render();
+}
+
+// ─── RESIZE ───────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+});
+
+// ─── HIDE LOADING ─────────────────────────────────────────
+setTimeout(() => {
+  document.getElementById('loading').classList.add('hidden');
+  setTimeout(() => document.getElementById('loading').style.display = 'none', 1000);
+}, 1500);
+
+// ─── START ─────���──────────────────────────────────────────
+document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
+requestAnimationFrame(animate);
+
+</script>
+</body>
+</html>
