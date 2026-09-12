@@ -293,11 +293,11 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x87CEEB, 0.0008);
 scene.background = new THREE.Color(0x87CEEB);
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 2000);
 if (isMobile) {
-  camera.position.set(10, 4.5, 15);
+  camera.position.set(0, 5.8, 22);
 } else {
-  camera.position.set(8, 4, 12);
+  camera.position.set(0, 5.2, 18);
 }
 
 const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: false, powerPreference: 'high-performance' });
@@ -312,28 +312,28 @@ renderer.physicallyCorrectLights = true;
 document.body.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 2.5, 0);
+controls.target.set(0, 4.5, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.minDistance = 3;
-controls.maxDistance = 50;
+controls.maxDistance = 60;
 controls.maxPolarAngle = Math.PI * 0.85;
 controls.autoRotate = true;
-controls.autoRotateSpeed = 0.3;
+controls.autoRotateSpeed = 0.35;
 controls.update();
 
 // ─── LIGHTING ─────────────────────────────────────────────
 // Sun (directional) — main light
-const sunLight = new THREE.DirectionalLight(0xFFF8E7, 1.8);
-sunLight.position.set(50, 80, 30);
+const sunLight = new THREE.DirectionalLight(0xFFF6DE, 2.0);
+sunLight.position.set(40, 60, 30);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
 sunLight.shadow.camera.near = 1;
-sunLight.shadow.camera.far = 200;
-sunLight.shadow.camera.left = -25;
-sunLight.shadow.camera.right = 25;
-sunLight.shadow.camera.top = 25;
-sunLight.shadow.camera.bottom = -5;
+sunLight.shadow.camera.far = 120;
+sunLight.shadow.camera.left = -16;
+sunLight.shadow.camera.right = 16;
+sunLight.shadow.camera.top = 16;
+sunLight.shadow.camera.bottom = -4;
 sunLight.shadow.bias = -0.001;
 sunLight.shadow.normalBias = 0.02;
 scene.add(sunLight);
@@ -661,126 +661,132 @@ function createGrassField() {
 
 const grassSystem = createGrassField();
 
-// ─── TREE GENERATION ──────────────────────────────────────
+// ─── GENSHIN IMPACT TREE GENERATOR ────────────────────────
 class TreeGenerator {
   constructor() {
     this.branches = [];
-    this.leaves = [];
+    this.clumps = [];
     this.trunkMesh = null;
     this.leafGroup = null;
-    this.maxHeight = 0;
+    this.maxHeight = 9.2;
     this.branchCount = 0;
     this.leafCount = 0;
-    this.trunkRadius = 0.22;
-    this.params = {};
-  }
-
-  // L-system inspired recursive branch generation
-  generateBranchData(startPos, direction, length, radius, depth, maxDepth, angleSpread, parentIndex = -1) {
-    if (depth > maxDepth || length < 0.02 || radius < 0.003) return [];
-
-    const segments = Math.max(2, Math.floor(length / 0.12));
-    const branchData = {
-      startPos: startPos.clone(),
-      endPos: startPos.clone().add(direction.clone().multiplyScalar(length)),
-      length,
-      radius,
-      depth,
-      segments,
-      parentIndex,
-      growOrder: this.branchCount,
-      children: [],
-      // Growth animation parameters
-      growDelay: depth * 0.04 + Math.random() * 0.02,
-      growDuration: 0.03 + Math.random() * 0.02,
-      // Physics
-      stiffness: 0.3 + depth * 0.15,
-      swayPhase: Math.random() * Math.PI * 2,
-      swayAmp: 0.002 + depth * 0.003,
-    };
-
-    const myIndex = this.branchCount;
-    if (parentIndex >= 0) {
-      this.branches[parentIndex].children.push(myIndex);
-    }
-
-    this.branches.push(branchData);
-    this.branchCount++;
-
-    // Sub-branches
-    if (depth < maxDepth) {
-      const numChildren = depth === 0 ? 3 : (Math.random() < 0.15 ? 3 : 2);
-      for (let i = 0; i < numChildren; i++) {
-        const t = (i + 1) / (numChildren + 1);
-        const branchPos = new THREE.Vector3().lerpVectors(startPos, branchData.endPos, t);
-
-        // Rotate direction with some variation
-        const perpAxis = new THREE.Vector3(1, 0, 0);
-        if (Math.abs(direction.dot(perpAxis)) > 0.9) perpAxis.set(0, 1, 0);
-        const rotAxis = new THREE.Vector3().crossVectors(direction, perpAxis).normalize();
-        const baseAngle = angleSpread * (0.7 + Math.random() * 0.6);
-        const azimuthAngle = (Math.PI * 2 / numChildren) * i + (Math.random() - 0.5) * 0.8;
-
-        const quat = new THREE.Quaternion().setFromAxisAngle(rotAxis, baseAngle);
-        const quatAzimuth = new THREE.Quaternion().setFromAxisAngle(direction, azimuthAngle);
-        const newDir = direction.clone().applyQuaternion(quat).applyQuaternion(quatAzimuth).normalize();
-
-        // Slight upward bias
-        newDir.y += 0.05 + Math.random() * 0.1;
-        newDir.normalize();
-
-        const childLength = length * (0.65 + Math.random() * 0.2);
-        const childRadius = radius * (0.55 + Math.random() * 0.15);
-
-        this.generateBranchData(
-          branchData.endPos, newDir, childLength, childRadius,
-          depth + 1, maxDepth, angleSpread * (0.75 + Math.random() * 0.15),
-          myIndex
-        );
-      }
-    }
-
-    return [branchData];
   }
 
   buildTree() {
-    // Clear old
-    if (this.trunkMesh) { scene.remove(this.trunkMesh); }
-    if (this.leafGroup) { scene.remove(this.leafGroup); }
+    if (this.trunkMesh) scene.remove(this.trunkMesh);
+    if (this.leafGroup) scene.remove(this.leafGroup);
     this.branches = [];
-    this.leaves = [];
-    this.branchCount = 0;
-    this.leafCount = 0;
+    this.clumps = [];
 
-    // Randomize tree parameters
-    this.params = {
-      maxDepth: 7,
-      trunkLength: 2.2 + Math.random() * 0.8,
-      trunkRadius: 0.18 + Math.random() * 0.08,
-      angleSpread: 0.55 + Math.random() * 0.25,
-      bendiness: 0.02 + Math.random() * 0.04,
-    };
-
-    // Slight trunk lean
-    const leanAngle = (Math.random() - 0.5) * 0.15;
-    const leanAxis = new THREE.Vector3(1, 0, 0);
-
-    // Start with trunk
-    const startPos = new THREE.Vector3(0, 0.05, 0);
-    const trunkDir = new THREE.Vector3(leanAngle, 1, 0).normalize();
-    this.generateBranchData(startPos, trunkDir, this.params.trunkLength, this.params.trunkRadius, 0, this.params.maxDepth, this.params.angleSpread);
-
-    // Build branch meshes — merged for performance
-    this.buildBranchMeshes();
-
-    // Generate leaves
-    this.generateLeaves();
-
-    // Compute max height
-    this.maxHeight = 0;
-    for (const b of this.branches) {
-      this.maxHeight = Math.max(this.maxHeight, b.endPos.y);
+    // 1. Buttress Root Flares (spreading gracefully into ground)
+    const numRoots = 5;
+    for (let r = 0; r < numRoots; r++) {
+      const angle = (r / numRoots) * Math.PI * 2 + 0.25;
+      const rootStart = new THREE.Vector3(Math.cos(angle) * 0.55, 0.85, Math.sin(angle) * 0.55);
+      const rootEnd = new THREE.Vector3(Math.cos(angle) * 2.3, 0.0, Math.sin(angle) * 2.3);
+      this.branches.push({
+        start: rootStart, end: rootEnd,
+        radiusStart: 0.38, radiusEnd: 0.08,
+        depth: 0, order: 0.05,
+        swayAmp: 0.001, swayPhase: angle
+      });
     }
+
+    // Top of continuous trunk where boughs diverge
+    const p3 = new THREE.Vector3(0.0, 3.7, 0.0);
+
+    // 2. Primary Boughs Radiating into Majestic Crown
+    const numBoughs = 5;
+    for (let i = 0; i < numBoughs; i++) {
+      const azimuth = (i / numBoughs) * Math.PI * 2 + (Math.sin(i * 1.7) * 0.2);
+      const spread = 0.85 + (i % 2 === 0 ? 0.15 : -0.1);
+      const boughDir = new THREE.Vector3(
+        Math.cos(azimuth) * Math.sin(spread),
+        Math.cos(spread) * 0.8 + 0.35,
+        Math.sin(azimuth) * Math.sin(spread)
+      ).normalize();
+
+      const boughLen = 3.0 + (i % 3 === 0 ? 0.6 : 0.2);
+      const boughEnd = p3.clone().add(boughDir.clone().multiplyScalar(boughLen));
+      boughEnd.y += 0.45; // Graceful upward arch
+
+      const boughOrder = 0.15 + (i / numBoughs) * 0.15;
+      this.branches.push({
+        start: p3, end: boughEnd,
+        radiusStart: 0.36, radiusEnd: 0.20,
+        depth: 1, order: boughOrder,
+        swayAmp: 0.012, swayPhase: azimuth
+      });
+
+      // Mid-bough foliage clump
+      this.clumps.push({
+        center: new THREE.Vector3().lerpVectors(p3, boughEnd, 0.65).add(new THREE.Vector3(0, 0.8, 0)),
+        radius: 2.0 + Math.random() * 0.4,
+        order: boughOrder
+      });
+
+      // Secondary branches from each bough
+      const numSec = 3;
+      for (let s = 0; s < numSec; s++) {
+        const secT = 0.48 + (s / numSec) * 0.52;
+        const secStart = new THREE.Vector3().lerpVectors(p3, boughEnd, secT);
+        const sideAngle = azimuth + ((s % 2 === 0 ? 1 : -1) * 0.75) + 0.1;
+        const secDir = new THREE.Vector3(
+          Math.cos(sideAngle) * 0.85,
+          0.35 + Math.random() * 0.3,
+          Math.sin(sideAngle) * 0.85
+        ).normalize();
+        const secLen = 2.0 + Math.random() * 0.6;
+        const secEnd = secStart.clone().add(secDir.multiplyScalar(secLen));
+
+        const secOrder = boughOrder + 0.15 + s * 0.05;
+        this.branches.push({
+          start: secStart, end: secEnd,
+          radiusStart: 0.18, radiusEnd: 0.08,
+          depth: 2, order: secOrder,
+          swayAmp: 0.02, swayPhase: sideAngle
+        });
+
+        // Foliage clumps along secondary branch
+        this.clumps.push({
+          center: secEnd.clone().add(new THREE.Vector3((Math.random()-0.5)*0.5, 0.6 + Math.random()*0.5, (Math.random()-0.5)*0.5)),
+          radius: 1.8 + Math.random() * 0.5,
+          order: secOrder
+        });
+
+        // Tertiary twigs
+        if (s > 0) {
+          const tertDir = secDir.clone().add(new THREE.Vector3((Math.random()-0.5)*0.6, 0.45, (Math.random()-0.5)*0.6)).normalize();
+          const tertEnd = secEnd.clone().add(tertDir.multiplyScalar(1.4));
+          const tertOrder = secOrder + 0.1;
+          this.branches.push({
+            start: secEnd, end: tertEnd,
+            radiusStart: 0.08, radiusEnd: 0.03,
+            depth: 3, order: tertOrder,
+            swayAmp: 0.028, swayPhase: sideAngle + 1.0
+          });
+          this.clumps.push({
+            center: tertEnd.clone().add(new THREE.Vector3(0, 0.6, 0)),
+            radius: 1.5 + Math.random() * 0.4,
+            order: tertOrder
+          });
+        }
+      }
+    }
+
+    // Top crown dome clumps (majestic cloud-like anime crown silhouette)
+    this.clumps.push({ center: new THREE.Vector3(0, 6.8, 0), radius: 2.7, order: 0.25 });
+    this.clumps.push({ center: new THREE.Vector3(1.0, 7.8, 0.8), radius: 2.4, order: 0.35 });
+    this.clumps.push({ center: new THREE.Vector3(-0.9, 7.5, -0.6), radius: 2.3, order: 0.40 });
+    this.clumps.push({ center: new THREE.Vector3(0.2, 8.8, 0.1), radius: 2.1, order: 0.55 });
+    this.clumps.push({ center: new THREE.Vector3(-0.8, 8.4, 0.8), radius: 1.9, order: 0.60 });
+
+    this.buildBranchMeshes();
+    this.buildLeaves();
+
+    this.branchCount = this.branches.length + 7;
+    this.leafCount = this.clumps.length * 12;
 
     return {
       branches: this.branchCount,
@@ -790,245 +796,202 @@ class TreeGenerator {
   }
 
   buildBranchMeshes() {
-    // Pre-allocate arrays — avoid .push() reallocation overhead
-    const maxBranches = this.branches.length;
-    const maxVertsPerBranch = 50; // conservative upper bound
-    const totalVertsEstimate = maxBranches * maxVertsPerBranch;
-    const positions = new Float32Array(totalVertsEstimate * 3);
-    const normals = new Float32Array(totalVertsEstimate * 3);
-    const uvs = new Float32Array(totalVertsEstimate * 2);
+    const radialSegs = 10;
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const colors = [];
+    const branchStarts = [];
+    const growthOrders = [];
     const indices = [];
-    const colorAttr = new Float32Array(totalVertsEstimate * 3);
-    const growthAttr = new Float32Array(totalVertsEstimate);
-    const swayPhaseAttr = new Float32Array(totalVertsEstimate);
-    const swayAmpAttr = new Float32Array(totalVertsEstimate);
-    const stiffnessAttr = new Float32Array(totalVertsEstimate);
-    const branchIndexAttr = new Float32Array(totalVertsEstimate);
-    const branchTAttr = new Float32Array(totalVertsEstimate);
-    let vertexOffset = 0;
-    let vertCount = 0;
+    let vertOffset = 0;
 
-    for (let b = 0; b < this.branches.length; b++) {
+    // 1. Continuous Seamless Trunk
+    const trunkRings = [
+      { pos: new THREE.Vector3(0, 0, 0), radius: 0.88, t: 0.0 },
+      { pos: new THREE.Vector3(0.04, 0.4, 0.02), radius: 0.74, t: 0.1 },
+      { pos: new THREE.Vector3(0.10, 1.0, -0.04), radius: 0.64, t: 0.25 },
+      { pos: new THREE.Vector3(0.12, 1.7, -0.10), radius: 0.56, t: 0.45 },
+      { pos: new THREE.Vector3(-0.05, 2.4, 0.06), radius: 0.48, t: 0.65 },
+      { pos: new THREE.Vector3(0.02, 3.1, 0.12), radius: 0.42, t: 0.85 },
+      { pos: new THREE.Vector3(0.0, 3.7, 0.0), radius: 0.38, t: 1.0 },
+    ];
+
+    const trunkBaseIdx = vertOffset;
+    for (let i = 0; i < trunkRings.length; i++) {
+      const ring = trunkRings[i];
+      for (let r = 0; r <= radialSegs; r++) {
+        const angle = (r / radialSegs) * Math.PI * 2;
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        const p = new THREE.Vector3(ring.pos.x + cos * ring.radius, ring.pos.y, ring.pos.z + sin * ring.radius);
+        const n = new THREE.Vector3(cos, 0.1, sin).normalize();
+
+        positions.push(p.x, p.y, p.z);
+        normals.push(n.x, n.y, n.z);
+        uvs.push(ring.t, r / radialSegs);
+
+        const c = new THREE.Color().setHSL(0.08, 0.55, 0.28);
+        colors.push(c.r, c.g, c.b);
+        branchStarts.push(0, 0, 0);
+        growthOrders.push(0.0);
+        vertOffset++;
+      }
+    }
+
+    for (let i = 0; i < trunkRings.length - 1; i++) {
+      for (let r = 0; r < radialSegs; r++) {
+        const a = trunkBaseIdx + i * (radialSegs + 1) + r;
+        const b1 = a + 1;
+        const c = a + radialSegs + 1;
+        const d = c + 1;
+        indices.push(a, c, b1, b1, c, d);
+      }
+    }
+
+    // 2. Roots and Boughs
+    const totalBranches = this.branches.length;
+    for (let b = 0; b < totalBranches; b++) {
       const branch = this.branches[b];
-      const segs = branch.segments;
-      const radialSegs = 8;
-
-      const start = branch.startPos;
-      const end = branch.endPos;
+      const start = branch.start;
+      const end = branch.end;
       const dir = new THREE.Vector3().subVectors(end, start);
       const len = dir.length();
       dir.normalize();
 
-      // Create perpendicular frame
-      const up = Math.abs(dir.y) < 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+      const segs = Math.max(2, Math.floor(len / 0.5));
+      const up = Math.abs(dir.y) < 0.95 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
       const right = new THREE.Vector3().crossVectors(dir, up).normalize();
       const forward = new THREE.Vector3().crossVectors(right, dir).normalize();
 
-      // Radius profile — tapered
-      const depthRatio = branch.depth / this.params.maxDepth;
-      const baseR = branch.radius;
+      const baseIdx = vertOffset;
 
-      // Build cylinder vertices
-      for (let seg = 0; seg <= segs; seg++) {
-        const t = seg / segs;
-        const posOnBranch = new THREE.Vector3().lerpVectors(start, end, t);
-        const r = baseR * (1 - t * 0.85) * (1 - depthRatio * 0.3);
+      for (let s = 0; s <= segs; s++) {
+        const t = s / segs;
+        const posOnAxis = new THREE.Vector3().lerpVectors(start, end, t);
+        const radius = THREE.MathUtils.lerp(branch.radiusStart, branch.radiusEnd, t);
 
-        for (let rad = 0; rad <= radialSegs; rad++) {
-          const angle = (rad / radialSegs) * Math.PI * 2;
-          const cos = Math.cos(angle), sin = Math.sin(angle);
-          const nx = cos * right.x + sin * forward.x;
-          const ny = cos * right.y + sin * forward.y;
-          const nz = cos * right.z + sin * forward.z;
+        for (let r = 0; r <= radialSegs; r++) {
+          const angle = (r / radialSegs) * Math.PI * 2;
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+          const n = new THREE.Vector3().addScaledVector(right, cos).addScaledVector(forward, sin);
+          const p = posOnAxis.clone().addScaledVector(n, radius);
 
-          const px = posOnBranch.x + nx * r;
-          const py = posOnBranch.y + ny * r;
-          const pz = posOnBranch.z + nz * r;
+          positions.push(p.x, p.y, p.z);
+          normals.push(n.x, n.y, n.z);
+          uvs.push(t, r / radialSegs);
 
-          const i3 = vertCount * 3;
-          positions[i3]=px; positions[i3+1]=py; positions[i3+2]=pz;
-          normals[i3]=nx; normals[i3+1]=ny; normals[i3+2]=nz;
-          uvs[vertCount*2]=t; uvs[vertCount*2+1]=angle/(Math.PI*2);
-          growthAttr[vertCount]=branch.growOrder/this.branches.length;
-          swayPhaseAttr[vertCount]=branch.swayPhase;
-          swayAmpAttr[vertCount]=branch.swayAmp;
-          stiffnessAttr[vertCount]=branch.stiffness;
-          branchIndexAttr[vertCount]=b;
-          branchTAttr[vertCount]=t;
+          const barkVal = 0.25 + (1.0 - t * 0.2) * 0.12;
+          const c = new THREE.Color().setHSL(0.08, 0.52, barkVal);
+          colors.push(c.r, c.g, c.b);
 
-          const brownR = 0.22 + depthRatio * 0.05;
-          const brownG = 0.13 + depthRatio * 0.03;
-          const brownB = 0.05 + depthRatio * 0.02;
-          colorAttr[i3]=brownR; colorAttr[i3+1]=brownG; colorAttr[i3+2]=brownB;
-          vertCount++;
+          branchStarts.push(start.x, start.y, start.z);
+          growthOrders.push(branch.order);
+          vertOffset++;
         }
       }
 
-      // Indices
-      for (let seg = 0; seg < segs; seg++) {
-        for (let rad = 0; rad < radialSegs; rad++) {
-          const a = vertexOffset + seg * (radialSegs + 1) + rad;
-          const bIdx = a + 1;
+      for (let s = 0; s < segs; s++) {
+        for (let r = 0; r < radialSegs; r++) {
+          const a = baseIdx + s * (radialSegs + 1) + r;
+          const b1 = a + 1;
           const c = a + radialSegs + 1;
           const d = c + 1;
-          indices.push(a, c, bIdx, bIdx, c, d);
+          indices.push(a, c, b1, b1, c, d);
         }
       }
-      vertexOffset += (segs + 1) * (radialSegs + 1);
     }
 
-    // Trim to actual used vertices
-    const finalGeo = new THREE.BufferGeometry();
-    finalGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions.subarray(0, vertCount*3), 3));
-    finalGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals.subarray(0, vertCount*3), 3));
-    finalGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.subarray(0, vertCount*2), 2));
-    finalGeo.setAttribute('colorVal', new THREE.Float32BufferAttribute(colorAttr.subarray(0, vertCount*3), 3));
-    finalGeo.setAttribute('growthIdx', new THREE.Float32BufferAttribute(growthAttr.subarray(0, vertCount), 1));
-    finalGeo.setAttribute('swayPhase', new THREE.Float32BufferAttribute(swayPhaseAttr.subarray(0, vertCount), 1));
-    finalGeo.setAttribute('swayAmp', new THREE.Float32BufferAttribute(swayAmpAttr.subarray(0, vertCount), 1));
-    finalGeo.setAttribute('stiffness', new THREE.Float32BufferAttribute(stiffnessAttr.subarray(0, vertCount), 1));
-    finalGeo.setAttribute('branchIdx', new THREE.Float32BufferAttribute(branchIndexAttr.subarray(0, vertCount), 1));
-    finalGeo.setAttribute('branchT', new THREE.Float32BufferAttribute(branchTAttr.subarray(0, vertCount), 1));
-    finalGeo.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('colorVal', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setAttribute('branchStart', new THREE.Float32BufferAttribute(branchStarts, 3));
+    geo.setAttribute('growthOrder', new THREE.Float32BufferAttribute(growthOrders, 1));
+    geo.setIndex(indices);
 
+    // Genshin Stylized Painterly Bark Shader
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
         uGrowth: { value: 0 },
-        uTotalBranches: { value: this.branches.length },
       },
       vertexShader: `
-        attribute float growthIdx;
-        attribute float swayPhase;
-        attribute float swayAmp;
-        attribute float stiffness;
-        attribute float branchIdx;
-        attribute float branchT;
         attribute vec3 colorVal;
-
+        attribute vec3 branchStart;
+        attribute float growthOrder;
         uniform float uTime;
         uniform float uGrowth;
-        uniform float uTotalBranches;
 
         varying vec3 vColor;
         varying vec3 vNormal;
         varying vec3 vWorldPos;
-        varying float vAO;
-
-        vec3 mod289(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
-        vec4 mod289(vec4 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
-        vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-        float snoise(vec3 v) {
-          const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-          const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-          vec3 i  = floor(v + dot(v, C.yyy));
-          vec3 x0 = v - i + dot(i, C.xxx);
-          vec3 g = step(x0.yzx, x0.xyz);
-          vec3 l = 1.0 - g;
-          vec3 i1 = min(g.xyz, l.zxy);
-          vec3 i2 = max(g.xyz, l.zxy);
-          vec3 x1 = x0 - i1 + C.xxx;
-          vec3 x2 = x0 - i2 + C.yyy;
-          vec3 x3 = x0 - D.yyy;
-          i = mod289(i);
-          vec4 p = permute(permute(permute(
-            i.z + vec4(0.0, i1.z, i2.z, 1.0))
-            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-          float n_ = 0.142857142857;
-          vec3 ns = n_ * D.wyz - D.xzx;
-          vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-          vec4 x_ = floor(j * ns.z);
-          vec4 y_ = floor(j - 7.0 * x_);
-          vec4 x = x_ * ns.x + ns.yyyy;
-          vec4 y = y_ * ns.x + ns.yyyy;
-          vec4 h = 1.0 - abs(x) - abs(y);
-          vec4 b0 = vec4(x.xy, y.xy);
-          vec4 b1 = vec4(x.zw, y.zw);
-          vec4 s0 = floor(b0)*2.0 + 1.0;
-          vec4 s1 = floor(b1)*2.0 + 1.0;
-          vec4 sh = -step(h, vec4(0.0));
-          vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-          vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-          vec3 p0 = vec3(a0.xy, h.x);
-          vec3 p1 = vec3(a0.zw, h.y);
-          vec3 p2 = vec3(a1.xy, h.z);
-          vec3 p3 = vec3(a1.zw, h.w);
-          vec4 norm = taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-          vec4 m = max(0.6 - vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)), 0.0);
-          m = m * m;
-          return 42.0 * dot(m*m, vec4(dot(p0*norm.x,x0),dot(p1*norm.y,x1),dot(p2*norm.z,x2),dot(p3*norm.w,x3)));
-        }
+        varying vec2 vUv;
 
         void main() {
-          float growProgress = clamp((uGrowth - growthIdx * 0.9) / max(0.001, 1.0 - growthIdx * 0.9), 0.0, 1.0);
-          growProgress = smoothstep(0.0, 1.0, growProgress);
-
+          vUv = uv;
           vec3 pos = position;
-          float t = branchT;
 
-          // Growth: scale branch from base to tip
-          float growthScale = smoothstep(0.0, 1.0, t * 2.0) * growProgress;
-          pos *= growthScale;
+          // Growth animation: trunk grows first (0.0 to 0.35), then branches extend
+          float gp = clamp((uGrowth - growthOrder * 0.55) / 0.3, 0.0, 1.0);
+          gp = smoothstep(0.0, 1.0, gp);
 
-          // Wind sway — uses sway attributes per branch
-          float windNoise = snoise(vec3(branchIdx * 0.1, uTime * 0.5 + swayPhase, 0.0));
-          float windNoise2 = snoise(vec3(branchIdx * 0.1 + 50.0, uTime * 0.4 + swayPhase, 0.0));
+          // Branches interpolate from start point to full shape
+          pos = mix(branchStart, pos, gp);
 
-          float swayAmount = swayAmp * growProgress;
-          // Wind increases with height on the branch
-          float heightFactor = pow(t, 1.5);
-          pos.x += windNoise * swayAmount * 3.0 * heightFactor * t;
-          pos.z += windNoise2 * swayAmount * 2.5 * heightFactor * t;
-          // Slight vertical oscillation
-          pos.y += sin(uTime * 1.3 + swayPhase) * swayAmount * 0.5 * t;
+          // Gentle anime wind sway
+          float sway = sin(uTime * 1.5 + pos.y * 0.3 + branchStart.x) * 0.015 * pow(max(0.0, pos.y), 1.3) * gp;
+          pos.x += sway;
+          pos.z += cos(uTime * 1.2 + pos.y * 0.3 + branchStart.z) * 0.012 * pow(max(0.0, pos.y), 1.3) * gp;
 
-          vColor = colorVal * (0.6 + 0.4 * growProgress);
           vNormal = normalMatrix * normal;
-          vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
-
-          // Ambient occlusion approximation
-          vAO = 1.0 - t * 0.15 * growProgress;
-
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+          vColor = colorVal;
+          vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+          vWorldPos = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
         varying vec3 vNormal;
         varying vec3 vWorldPos;
-        varying float vAO;
+        varying vec2 vUv;
 
         void main() {
           vec3 normal = normalize(vNormal);
-          vec3 lightDir = normalize(vec3(50.0, 80.0, 30.0));
-
-          // Diffuse
-          float diff = max(dot(normal, lightDir), 0.0);
-          diff = diff * 0.7 + 0.3; // Wrap lighting
-
-          // Specular (rough bark)
+          vec3 sunDir = normalize(vec3(40.0, 60.0, 30.0));
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
-          vec3 halfDir = normalize(lightDir + viewDir);
-          float spec = pow(max(dot(normal, halfDir), 0.0), 16.0) * 0.15;
 
-          // Subsurface scattering approximation
-          float sss = max(0.0, dot(-normal, lightDir)) * 0.1;
+          float NdotL = dot(normal, sunDir);
 
-          vec3 col = vColor * diff + vec3(0.3, 0.25, 0.15) * spec + vec3(0.4, 0.3, 0.15) * sss;
-          col *= vAO;
+          // Genshin 2-band cel shading
+          float cel = smoothstep(-0.1, 0.25, NdotL);
 
-          // Slight rim light
-          float rim = 1.0 - max(dot(normal, viewDir), 0.0);
-          col += vec3(0.05, 0.06, 0.03) * pow(rim, 3.0);
+          // Warm cedar bark palette
+          vec3 colShadow = vColor * 0.55;
+          vec3 colLight  = vColor * 1.35;
+          vec3 col = mix(colShadow, colLight, cel);
+
+          // Vertical organic bark grain
+          float grain = sin(vUv.y * 80.0 + sin(vUv.x * 25.0) * 2.0) * 0.04;
+          col += grain;
+
+          // Base moss gradient
+          float moss = smoothstep(1.5, 0.1, vWorldPos.y);
+          vec3 mossColor = vec3(0.28, 0.46, 0.15);
+          col = mix(col, mossColor, moss * 0.75);
+
+          // Subtle anime rim light
+          float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.5);
+          col += vec3(0.5, 0.4, 0.2) * rim * 0.25;
 
           gl_FragColor = vec4(col, 1.0);
         }
       `
     });
 
-    this.trunkMesh = new THREE.Mesh(finalGeo, mat);
+    this.trunkMesh = new THREE.Mesh(geo, mat);
     this.trunkMesh.name = 'treeBranches';
     this.trunkMesh.castShadow = true;
     this.trunkMesh.receiveShadow = true;
@@ -1036,159 +999,194 @@ class TreeGenerator {
     scene.add(this.trunkMesh);
   }
 
-  generateLeaves() {
-    // Generate leaves at branch tips
-    const leafPositions = [];
-    const leafColors = [];
-    const leafPhases = [];
-    const leafSizes = [];
+  buildLeaves() {
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const clumpCenters = [];
+    const clumpOrders = [];
+    const cardIndices = [];
+    const indices = [];
+    let vertOffset = 0;
 
-    for (const branch of this.branches) {
-      if (branch.depth < 3) continue;
+    const crownCenter = new THREE.Vector3(0, 6.5, 0);
 
-      const numLeaves = Math.floor(3 + Math.random() * 8);
-      for (let i = 0; i < numLeaves; i++) {
-        const t = 0.5 + Math.random() * 0.5;
-        const pos = new THREE.Vector3().lerpVectors(branch.startPos, branch.endPos, t);
-        // Add some spread
-        pos.x += (Math.random() - 0.5) * branch.radius * 8;
-        pos.y += (Math.random() - 0.5) * branch.radius * 6;
-        pos.z += (Math.random() - 0.5) * branch.radius * 8;
+    for (let c = 0; c < this.clumps.length; c++) {
+      const clump = this.clumps[c];
+      const center = clump.center;
+      const R = clump.radius;
+      const cardsPerClump = 12;
 
-        leafPositions.push(pos.x, pos.y, pos.z);
+      for (let k = 0; k < cardsPerClump; k++) {
+        const phi = Math.acos(-1 + (2 * k) / cardsPerClump);
+        const theta = Math.sqrt(cardsPerClump * Math.PI) * phi;
 
-        // Leaf color — rich green
-        const hue = 0.22 + Math.random() * 0.08;
-        const sat = 0.6 + Math.random() * 0.3;
-        const val = 0.2 + Math.random() * 0.2;
-        const c = new THREE.Color().setHSL(hue, sat, val);
-        leafColors.push(c.r, c.g, c.b);
+        const offsetDir = new THREE.Vector3(
+          Math.cos(theta) * Math.sin(phi),
+          Math.sin(theta) * Math.sin(phi),
+          Math.cos(phi)
+        );
 
-        leafPhases.push(Math.random() * Math.PI * 2);
-        leafSizes.push(0.08 + Math.random() * 0.15);
+        const cardCenter = center.clone().addScaledVector(offsetDir, R * (0.35 + Math.random() * 0.45));
+        const cardSize = R * (0.95 + Math.random() * 0.35);
+
+        // Frame
+        const normalOut = new THREE.Vector3().subVectors(cardCenter, center).normalize();
+        const up = new THREE.Vector3(0, 1, 0);
+        const cardRight = new THREE.Vector3().crossVectors(normalOut, up).normalize();
+        const cardUp = new THREE.Vector3().crossVectors(cardRight, normalOut).normalize();
+
+        const half = cardSize * 0.5;
+        const corners = [
+          cardCenter.clone().addScaledVector(cardRight, -half).addScaledVector(cardUp, -half),
+          cardCenter.clone().addScaledVector(cardRight,  half).addScaledVector(cardUp, -half),
+          cardCenter.clone().addScaledVector(cardRight, -half).addScaledVector(cardUp,  half),
+          cardCenter.clone().addScaledVector(cardRight,  half).addScaledVector(cardUp,  half),
+        ];
+
+        const cardUvs = [[0,0], [1,0], [0,1], [1,1]];
+        const base = vertOffset;
+
+        for (let i = 0; i < 4; i++) {
+          const p = corners[i];
+          positions.push(p.x, p.y, p.z);
+
+          // SPHERICAL NORMALS: Outward from clump center + blended with tree crown center!
+          const sphNorm = new THREE.Vector3().subVectors(p, center).normalize();
+          const crownNorm = new THREE.Vector3().subVectors(p, crownCenter).normalize();
+          const blendedNorm = new THREE.Vector3().addVectors(sphNorm.multiplyScalar(0.7), crownNorm.multiplyScalar(0.3)).normalize();
+          normals.push(blendedNorm.x, blendedNorm.y, blendedNorm.z);
+
+          uvs.push(cardUvs[i][0], cardUvs[i][1]);
+          clumpCenters.push(center.x, center.y, center.z);
+          clumpOrders.push(clump.order);
+          cardIndices.push(k / cardsPerClump);
+          vertOffset++;
+        }
+
+        indices.push(base, base+1, base+2, base+1, base+3, base+2);
       }
     }
 
-    this.leafCount = leafPositions.length / 3;
-    document.getElementById('stat-leaves').textContent = this.leafCount;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('clumpCenter', new THREE.Float32BufferAttribute(clumpCenters, 3));
+    geo.setAttribute('clumpOrder', new THREE.Float32BufferAttribute(clumpOrders, 1));
+    geo.setAttribute('cardIdx', new THREE.Float32BufferAttribute(cardIndices, 1));
+    geo.setIndex(indices);
 
-    if (leafPositions.length === 0) return;
-
-    const leafGeo = new THREE.BufferGeometry();
-    leafGeo.setAttribute('position', new THREE.Float32BufferAttribute(leafPositions, 3));
-    leafGeo.setAttribute('colorVal', new THREE.Float32BufferAttribute(leafColors, 3));
-    leafGeo.setAttribute('phase', new THREE.Float32BufferAttribute(leafPhases, 1));
-    leafGeo.setAttribute('size', new THREE.Float32BufferAttribute(leafSizes, 1));
-
-    // Add indices for triangles (each leaf is a small quad)
-    const quadIndices = [];
-    for (let i = 0; i < this.leafCount; i++) {
-      const base = i * 4;
-      quadIndices.push(base, base+1, base+2, base+1, base+3, base+2);
-    }
-
-    // Duplicate positions for quad
-    const quadPositions = new Float32Array(this.leafCount * 12);
-    const quadColors = new Float32Array(this.leafCount * 12);
-    const quadPhases = new Float32Array(this.leafCount * 4);
-    const quadUvs = new Float32Array(this.leafCount * 8);
-    const quadGrowth = new Float32Array(this.leafCount * 4);
-
-    for (let i = 0; i < this.leafCount; i++) {
-      const growthIdx = this.branches.length > 0 ? Math.random() : 0;
-      const px = leafPositions[i*3], py = leafPositions[i*3+1], pz = leafPositions[i*3+2];
-      const s = leafSizes[i];
-      const cr = leafColors[i*3], cg = leafColors[i*3+1], cb = leafColors[i*3+2];
-      const ph = leafPhases[i];
-
-      // Quad corners
-      const corners = [
-        [px - s*0.5, py, pz - s*0.3],
-        [px + s*0.5, py, pz - s*0.3],
-        [px - s*0.3, py + s*0.8, pz],
-        [px + s*0.3, py + s*0.8, pz],
-      ];
-
-      for (let c = 0; c < 4; c++) {
-        const vi = i * 4 + c;
-        quadPositions[vi * 3]     = corners[c][0];
-        quadPositions[vi * 3 + 1] = corners[c][1];
-        quadPositions[vi * 3 + 2] = corners[c][2];
-        quadColors[vi * 3]     = cr;
-        quadColors[vi * 3 + 1] = cg;
-        quadColors[vi * 3 + 2] = cb;
-        quadPhases[vi] = ph;
-        quadGrowth[vi] = growthIdx;
-        quadUvs[vi * 2]     = (c < 2) ? 0 : 1;
-        quadUvs[vi * 2 + 1] = (c % 2 === 0) ? 0 : 1;
-      }
-    }
-
-    leafGeo.setAttribute('position', new THREE.Float32BufferAttribute(quadPositions, 3));
-    leafGeo.setAttribute('colorVal', new THREE.Float32BufferAttribute(quadColors, 3));
-    leafGeo.setAttribute('phase', new THREE.Float32BufferAttribute(quadPhases, 1));
-    leafGeo.setAttribute('growthIdx', new THREE.Float32BufferAttribute(quadGrowth, 1));
-    leafGeo.setAttribute('uv', new THREE.Float32BufferAttribute(quadUvs, 2));
-    leafGeo.setIndex(quadIndices);
-    leafGeo.computeVertexNormals();
-
-    const leafMat = new THREE.ShaderMaterial({
+    // Genshin Impact Volumetric Foliage Cel-Shader
+    const mat = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
       transparent: true,
-      alphaTest: 0.1,
+      alphaTest: 0.18,
       uniforms: {
         uTime: { value: 0 },
         uGrowth: { value: 0 },
       },
       vertexShader: `
-        attribute float growthIdx;
-        attribute float phase;
-        attribute vec3 colorVal;
-
+        attribute vec3 clumpCenter;
+        attribute float clumpOrder;
+        attribute float cardIdx;
         uniform float uTime;
         uniform float uGrowth;
 
-        varying vec3 vColor;
         varying vec2 vUv;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying float vHeightGradient;
+        varying float vAlphaFactor;
 
         void main() {
-          float gp = smoothstep(0.0, 1.0, uGrowth - growthIdx * 0.8);
-
-          vec3 pos = position;
-          // Scale from center
-          pos *= gp;
-
-          // Leaf flutter
-          pos.x += sin(uTime * 3.0 + phase) * 0.02 * gp;
-          pos.z += cos(uTime * 2.5 + phase * 1.3) * 0.02 * gp;
-          pos.y += sin(uTime * 2.0 + phase * 0.7) * 0.015 * gp;
-
-          vColor = colorVal;
           vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+
+          // Foliage blooms after branch reaches it (0.35 to 1.0)
+          float gp = clamp((uGrowth - (0.30 + clumpOrder * 0.45)) / 0.22, 0.0, 1.0);
+          gp = smoothstep(0.0, 1.0, gp);
+
+          // Card scales out organically from clump center
+          vec3 pos = mix(clumpCenter, position, gp);
+
+          // Gentle anime wind sway and card flutter
+          float wind = sin(uTime * 2.2 + clumpCenter.x * 0.7 + clumpCenter.z * 0.7) * 0.16;
+          float flutter = sin(uTime * 4.5 + cardIdx * 6.28) * 0.04;
+          pos.x += (wind + flutter) * gp;
+          pos.z += (wind * 0.7 + flutter) * gp;
+
+          vNormal = normalMatrix * normal;
+          vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+          vWorldPos = worldPos.xyz;
+          vHeightGradient = clamp((worldPos.y - 3.5) / 6.0, 0.0, 1.0);
+          vAlphaFactor = gp;
+
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
         }
       `,
       fragmentShader: `
-        varying vec3 vColor;
         varying vec2 vUv;
+        varying vec3 vNormal;
+        varying vec3 vWorldPos;
+        varying float vHeightGradient;
+        varying float vAlphaFactor;
 
         void main() {
-          vec3 col = vColor * 1.2;
-          col += vec3(0.02, 0.03, 0.01) * vUv.y;
+          if (vAlphaFactor < 0.01) discard;
 
-          // Soft edge
-          float edgeFade = 1.0 - abs(vUv.x - 0.5) * 2.0;
-          edgeFade *= 1.0 - abs(vUv.y - 0.5) * 2.0;
-          float alpha = edgeFade * 0.88;
+          // Procedural anime leaf cluster silhouette
+          vec2 p = vUv * 2.0 - 1.0;
+          float dist = length(p);
+          float angle = atan(p.y, p.x);
+          float lobes = sin(angle * 5.0) * 0.14 + cos(angle * 3.0 + 1.0) * 0.09;
+          float radius = 0.80 + lobes;
+          float alpha = smoothstep(radius, radius - 0.12, dist) * vAlphaFactor;
+          if (alpha < 0.18) discard;
 
-          if (alpha < 0.01) discard;
+          vec3 normal = normalize(vNormal);
+          vec3 sunDir = normalize(vec3(40.0, 60.0, 30.0));
+          vec3 viewDir = normalize(cameraPosition - vWorldPos);
+
+          float NdotL = dot(normal, sunDir);
+
+          // Genshin 3-band stylized color ramp
+          float ramp = smoothstep(-0.25, 0.35, NdotL);
+          float sunHighlight = smoothstep(0.40, 0.75, NdotL);
+
+          // Rich Mondstadt anime palette:
+          // Shadow: cool deep jade
+          vec3 colShadow = vec3(0.09, 0.30, 0.18);
+          // Midtone: vibrant lush emerald
+          vec3 colMid    = vec3(0.28, 0.68, 0.22);
+          // Sunlit: radiant golden chartreuse
+          vec3 colLight  = vec3(0.72, 0.92, 0.26);
+
+          // Sun kissed crown gradient
+          colLight += vec3(0.08, 0.06, -0.05) * vHeightGradient;
+
+          vec3 col = mix(colShadow, colMid, ramp);
+          col = mix(col, colLight, sunHighlight);
+
+          // Subsurface scattering (Backlight glow through foliage)
+          float sss = pow(clamp(dot(viewDir, -sunDir), 0.0, 1.0), 3.0);
+          col += vec3(0.85, 0.95, 0.30) * sss * 0.65;
+
+          // Anime fresnel rim light
+          float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+          col += vec3(0.5, 0.85, 0.3) * rim * 0.4;
+
+          // Inner clump ambient occlusion
+          col *= (0.7 + 0.3 * smoothstep(0.0, 0.8, dist));
+
           gl_FragColor = vec4(col, alpha);
         }
       `
     });
 
-    this.leafGroup = new THREE.Mesh(leafGeo, leafMat);
+    this.leafGroup = new THREE.Mesh(geo, mat);
     this.leafGroup.name = 'leaves';
+    this.leafGroup.castShadow = true;
+    this.leafGroup.receiveShadow = true;
     this.leafGroup.frustumCulled = false;
     scene.add(this.leafGroup);
   }
@@ -1205,21 +1203,33 @@ class TreeGenerator {
   }
 }
 
-// ─── ATMOSPHERIC PARTICLES ────────────────────────────────
+// ─── DRIFTING ANIME LEAF PETALS ───────────────────────────
 function createParticles() {
-  const count = 1000; // Reduced particle count for faster init
+  const count = 350; // Drifting anime foliage petals
   const positions = new Float32Array(count * 3);
   const sizes = new Float32Array(count);
   const phases = new Float32Array(count);
   const speeds = new Float32Array(count);
+  const colors = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i++) {
-    positions[i * 3]     = (Math.random() - 0.5) * 60;
-    positions[i * 3 + 1] = Math.random() * 15 + 0.5;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
-    sizes[i] = 0.5 + Math.random() * 2.0;
+    // Spawn across tree crown
+    positions[i * 3]     = (Math.random() - 0.5) * 14;
+    positions[i * 3 + 1] = 0.5 + Math.random() * 9.5;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 14;
+    sizes[i] = 2.2 + Math.random() * 2.8;
     phases[i] = Math.random() * Math.PI * 2;
-    speeds[i] = 0.1 + Math.random() * 0.4;
+    speeds[i] = 0.35 + Math.random() * 0.5;
+
+    // Lime green to peach blossom tints
+    const isPeach = Math.random() < 0.25;
+    if (isPeach) {
+      colors[i * 3] = 0.96; colors[i * 3 + 1] = 0.68; colors[i * 3 + 2] = 0.55;
+    } else {
+      colors[i * 3] = 0.55 + Math.random() * 0.25;
+      colors[i * 3 + 1] = 0.85 + Math.random() * 0.12;
+      colors[i * 3 + 2] = 0.25;
+    }
   }
 
   const geo = new THREE.BufferGeometry();
@@ -1227,11 +1237,11 @@ function createParticles() {
   geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
   geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
   geo.setAttribute('speed', new THREE.Float32BufferAttribute(speeds, 1));
+  geo.setAttribute('colorVal', new THREE.Float32BufferAttribute(colors, 3));
 
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
     uniforms: {
       uTime: { value: 0 },
       uPixelRatio: { value: renderer.getPixelRatio() },
@@ -1240,35 +1250,53 @@ function createParticles() {
       attribute float size;
       attribute float phase;
       attribute float speed;
+      attribute vec3 colorVal;
 
       uniform float uTime;
       uniform float uPixelRatio;
 
+      varying vec3 vColor;
       varying float vAlpha;
+      varying float vRot;
 
       void main() {
         vec3 pos = position;
-        // Float upward and drift
-        pos.y = mod(pos.y + uTime * speed * 0.3, 16.0);
-        pos.x += sin(uTime * 0.5 + phase) * 1.5;
-        pos.z += cos(uTime * 0.4 + phase * 1.7) * 1.5;
+
+        // Spiral drifting descent from canopy
+        float t = uTime * speed;
+        pos.y = mod(pos.y - t * 0.7, 10.0);
+
+        float swirl = uTime * 0.7 + phase;
+        pos.x += sin(swirl) * 1.3 + sin(uTime * 1.4 + phase) * 0.4;
+        pos.z += cos(swirl) * 1.3 + cos(uTime * 1.2 + phase) * 0.4;
 
         vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-        gl_PointSize = size * uPixelRatio * (80.0 / -mvPosition.z);
-        gl_PointSize = clamp(gl_PointSize, 0.5, 8.0);
+        gl_PointSize = size * uPixelRatio * (60.0 / -mvPosition.z);
+        gl_PointSize = clamp(gl_PointSize, 1.0, 16.0);
         gl_Position = projectionMatrix * mvPosition;
 
-        vAlpha = 0.15 + 0.15 * sin(uTime * 2.0 + phase);
+        vColor = colorVal;
+        vAlpha = smoothstep(0.0, 1.2, pos.y) * smoothstep(10.0, 8.5, pos.y) * 0.85;
+        vRot = uTime * 2.2 + phase;
       }
     `,
     fragmentShader: `
+      varying vec3 vColor;
       varying float vAlpha;
+      varying float vRot;
 
       void main() {
-        float d = length(gl_PointCoord - 0.5);
-        if (d > 0.5) discard;
-        float alpha = smoothstep(0.5, 0.1, d) * vAlpha;
-        gl_FragColor = vec4(1.0, 0.98, 0.9, alpha);
+        // Rotate point coord into stylized anime leaf shape
+        vec2 uv = gl_PointCoord - 0.5;
+        float cosA = cos(vRot), sinA = sin(vRot);
+        uv = vec2(uv.x * cosA - uv.y * sinA, uv.x * sinA + uv.y * cosA);
+
+        // Leaf silhouette: pointed ends
+        float dist = length(uv * vec2(1.0, 2.2));
+        if (dist > 0.48) discard;
+
+        float alpha = smoothstep(0.48, 0.35, dist) * vAlpha;
+        gl_FragColor = vec4(vColor, alpha);
       }
     `
   });
@@ -1390,7 +1418,9 @@ composer.addPass(colorPass);
 // ─── TREE INSTANCE ────────────────────────────────────────
 const tree = new TreeGenerator();
 const treeStats = tree.buildTree();
+window.tree = tree;
 document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
+document.getElementById('stat-leaves').textContent = '0';
 document.getElementById('stat-height').textContent = '0.0 m';
 document.getElementById('stat-stage').textContent = 'Seedling';
 
@@ -1403,6 +1433,7 @@ const state = {
   windBase: 0.3,
   windVariation: 0,
 };
+window.state = state;
 
 function getWindStrength() {
   // Wind varies over time using multiple noise octaves
@@ -1548,6 +1579,7 @@ function animate(now) {
   document.getElementById('stat-time').textContent = `${formatTime(elapsed)} / 3:00`;
   document.getElementById('stat-stage').textContent = stage.label;
   document.getElementById('stat-height').textContent = `${(tree.maxHeight * g).toFixed(1)} m`;
+  document.getElementById('stat-leaves').textContent = Math.round(treeStats.leaves * 35 * Math.max(0, (g - 0.25) / 0.75)).toLocaleString();
   document.getElementById('stat-wind').textContent = `${wind.toFixed(1)} m/s`;
   document.getElementById('time-current').textContent = formatTime(elapsed);
   timelineFill.style.width = `${g * 100}%`;
