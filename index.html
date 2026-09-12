@@ -51,6 +51,19 @@
     font-size: 12px; font-weight: 600; color: #c8e6a0; font-variant-numeric: tabular-nums;
     text-align: right;
   }
+  .stat-select {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #c8e6a0; border-radius: 6px; padding: 2px 6px;
+    font-size: 11px; font-weight: 600; cursor: pointer; outline: none;
+    font-family: inherit; max-width: 175px; text-align: right;
+  }
+  .stat-select:focus {
+    border-color: rgba(126,200,80,0.5);
+  }
+  .stat-select option {
+    background: #121510; color: #c8e6a0;
+  }
 
   #timeline {
     position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
@@ -159,11 +172,23 @@
   <div class="ui-header">
     <div>
       <h2>Arbor Genesis</h2>
-      <div class="subtitle">ANU Biological Mensuration</div>
+      <div class="subtitle">ANU Mensuration &bull; Cornell 3D L-System</div>
     </div>
     <button id="ui-toggle" title="Toggle Stats">&#x25BE;</button>
   </div>
   <div id="ui-body">
+    <div class="stat-row">
+      <span class="stat-label">3D L-System</span>
+      <select id="select-preset" class="stat-select">
+        <option value="genshin" selected>Genshin Sacred Oak</option>
+        <option value="cornell3d1">Cornell 3D-1 (Chen 1995)</option>
+        <option value="cornell3d2">Cornell 3D-2 (Chen 1995)</option>
+      </select>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Grammar Rule</span>
+      <span class="stat-value" id="stat-grammar" style="font-size: 10px; color: #a8d672; max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Stochastic Apical Boughs">Stochastic Apical Boughs</span>
+    </div>
     <div class="stat-row">
       <span class="stat-label">Elapsed / Age</span>
       <span class="stat-value" id="stat-time">0:00 (0.0 yr)</span>
@@ -837,7 +862,136 @@ function createGenshinLeafTexture() {
 
 const genshinLeafTexture = createGenshinLeafTexture();
 
-// ─── GENSHIN IMPACT TREE GENERATOR ────────────────────────
+// ─── 3D TURTLE L-SYSTEM GENERATOR (CORNELL / CHEN 1995) ────
+class LSystem3DTurtle {
+  constructor(axiom, rules, angleDeg, depth) {
+    this.axiom = axiom;
+    this.rules = rules;
+    this.angle = (angleDeg * Math.PI) / 180;
+    this.depth = depth;
+  }
+
+  generateString() {
+    let s = this.axiom;
+    for (let d = 0; d < this.depth; d++) {
+      let next = "";
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        next += this.rules[ch] !== undefined ? this.rules[ch] : ch;
+      }
+      s = next;
+    }
+    return s;
+  }
+
+  interpret(stepSize, trunkBaseHeight = 1.6) {
+    const str = this.generateString();
+    const branches = [];
+    const allClumps = [];
+    const stack = [];
+
+    // Turtle triad: Heading (H), Left (L), Up (U) satisfying H x L = U
+    let pos = new THREE.Vector3(0, trunkBaseHeight, 0);
+    let H = new THREE.Vector3(0, 1, 0);
+    let L = new THREE.Vector3(-1, 0, 0);
+    let U = new THREE.Vector3(0, 0, 1);
+    let curDepth = 1;
+    let curLen = stepSize;
+    let curRadius = 0.34;
+
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (ch === 'F') {
+        const nextPos = pos.clone().add(H.clone().multiplyScalar(curLen));
+        const order = Math.min(1.0, 0.12 + (nextPos.y / 10.5) * 0.75);
+        branches.push({
+          start: pos.clone(),
+          end: nextPos.clone(),
+          radiusStart: curRadius,
+          radiusEnd: curRadius * 0.82,
+          depth: curDepth,
+          order: order,
+          swayAmp: 0.010 * curDepth,
+          swayPhase: pos.x * 1.5 + pos.z * 1.5
+        });
+
+        // Collect foliage clumps at branch tips and upper nodes
+        const isTip = (i === str.length - 1 || str[i + 1] === ']');
+        if (curDepth >= 2 || isTip) {
+          allClumps.push({
+            center: nextPos.clone().add(new THREE.Vector3(0, 0.45, 0)),
+            radius: Math.max(1.3, 2.2 - curDepth * 0.25),
+            order: Math.min(1.0, order + 0.05)
+          });
+        }
+
+        pos = nextPos;
+        curRadius *= 0.96;
+      } else if (ch === '+') {
+        H.applyAxisAngle(U, this.angle).normalize();
+        L.applyAxisAngle(U, this.angle).normalize();
+      } else if (ch === '-') {
+        H.applyAxisAngle(U, -this.angle).normalize();
+        L.applyAxisAngle(U, -this.angle).normalize();
+      } else if (ch === '&') {
+        H.applyAxisAngle(L, this.angle).normalize();
+        U.applyAxisAngle(L, this.angle).normalize();
+      } else if (ch === '^') {
+        H.applyAxisAngle(L, -this.angle).normalize();
+        U.applyAxisAngle(L, -this.angle).normalize();
+      } else if (ch === '<') {
+        L.applyAxisAngle(H, this.angle).normalize();
+        U.applyAxisAngle(H, this.angle).normalize();
+      } else if (ch === '>') {
+        L.applyAxisAngle(H, -this.angle).normalize();
+        U.applyAxisAngle(H, -this.angle).normalize();
+      } else if (ch === '|') {
+        H.applyAxisAngle(U, Math.PI).normalize();
+        L.applyAxisAngle(U, Math.PI).normalize();
+      } else if (ch === '[') {
+        stack.push({
+          pos: pos.clone(),
+          H: H.clone(),
+          L: L.clone(),
+          U: U.clone(),
+          depth: curDepth,
+          len: curLen,
+          radius: curRadius
+        });
+        curDepth++;
+        curLen *= 0.82;
+        curRadius *= 0.78;
+      } else if (ch === ']') {
+        if (stack.length > 0) {
+          const s = stack.pop();
+          pos = s.pos;
+          H = s.H;
+          L = s.L;
+          U = s.U;
+          curDepth = s.depth;
+          curLen = s.len;
+          curRadius = s.radius;
+        }
+      }
+    }
+
+    // Sample foliage clumps evenly to maintain 60 FPS
+    const maxClumps = isMobile ? 30 : 38;
+    const clumps = [];
+    if (allClumps.length <= maxClumps) {
+      clumps.push(...allClumps);
+    } else {
+      const step = allClumps.length / maxClumps;
+      for (let k = 0; k < maxClumps; k++) {
+        clumps.push(allClumps[Math.floor(k * step)]);
+      }
+    }
+
+    return { branches, clumps };
+  }
+}
+
+// ─── PROCEDURAL 3D TREE GENERATOR (GENSHIN & CORNELL 3D-L) ──
 class TreeGenerator {
   constructor() {
     this.branches = [];
@@ -849,13 +1003,23 @@ class TreeGenerator {
     this.leafCount = 0;
     this.branchTris = 0;
     this.leafTris = 0;
+    this.currentPreset = 'genshin';
   }
 
-  buildTree() {
-    if (this.trunkMesh) scene.remove(this.trunkMesh);
-    if (this.leafGroup) scene.remove(this.leafGroup);
+  buildTree(presetKey = 'genshin') {
+    if (this.trunkMesh) {
+      scene.remove(this.trunkMesh);
+      if (this.trunkMesh.geometry) this.trunkMesh.geometry.dispose();
+      this.trunkMesh = null;
+    }
+    if (this.leafGroup) {
+      scene.remove(this.leafGroup);
+      if (this.leafGroup.geometry) this.leafGroup.geometry.dispose();
+      this.leafGroup = null;
+    }
     this.branches = [];
     this.clumps = [];
+    this.currentPreset = presetKey;
 
     // 1. Buttress Root Flares (8 high-poly roots anchoring gracefully into soil)
     const numRoots = 8;
@@ -872,125 +1036,139 @@ class TreeGenerator {
       });
     }
 
-    // Top of continuous trunk where main boughs diverge
-    const p3 = new THREE.Vector3(0.0, 3.7, 0.0);
+    let trunkHeight = 3.7;
 
-    // 2. Primary Boughs Radiating into Majestic Crown (6 sweeping boughs)
-    const numBoughs = 6;
-    for (let i = 0; i < numBoughs; i++) {
-      const azimuth = (i / numBoughs) * Math.PI * 2 + (Math.sin(i * 1.5) * 0.22);
-      const spread = 0.82 + (i % 2 === 0 ? 0.16 : -0.08);
-      const boughDir = new THREE.Vector3(
-        Math.cos(azimuth) * Math.sin(spread),
-        Math.cos(spread) * 0.78 + 0.38,
-        Math.sin(azimuth) * Math.sin(spread)
-      ).normalize();
-
-      const boughLen = 3.2 + (i % 3 === 0 ? 0.5 : 0.15);
-      const boughEnd = p3.clone().add(boughDir.clone().multiplyScalar(boughLen));
-      boughEnd.y += 0.45; // Graceful upward arch
-
-      const boughOrder = 0.15 + (i / numBoughs) * 0.15;
-      this.branches.push({
-        start: p3, end: boughEnd,
-        radiusStart: 0.38, radiusEnd: 0.22,
-        depth: 1, order: boughOrder,
-        swayAmp: 0.012, swayPhase: azimuth
-      });
-
-      // Mid-bough foliage clump
-      this.clumps.push({
-        center: new THREE.Vector3().lerpVectors(p3, boughEnd, 0.62).add(new THREE.Vector3(0, 0.75, 0)),
-        radius: 2.1 + (i % 3) * 0.2,
-        order: boughOrder
-      });
-
-      // Secondary branches from each bough (4 per bough = 24 branches)
-      const numSec = 4;
-      for (let s = 0; s < numSec; s++) {
-        const secT = 0.40 + (s / numSec) * 0.58;
-        const secStart = new THREE.Vector3().lerpVectors(p3, boughEnd, secT);
-        const sideAngle = azimuth + ((s % 2 === 0 ? 1 : -1) * 0.72) + 0.12;
-        const secDir = new THREE.Vector3(
-          Math.cos(sideAngle) * 0.82,
-          0.38 + (s % 2) * 0.15,
-          Math.sin(sideAngle) * 0.82
+    if (presetKey === 'cornell3d1') {
+      // Cornell 3D-1 (Chen 1995, Fig 1): F -> F[-&<F][<++&F]||F[--&>F][+&F], angle 22.5, depth 3
+      trunkHeight = 1.6;
+      this.maxHeight = 9.4;
+      const turtle = new LSystem3DTurtle('F', { 'F': 'F[-&<F][<++&F]||F[--&>F][+&F]' }, 22.5, 3);
+      const res = turtle.interpret(0.72, trunkHeight);
+      this.branches.push(...res.branches);
+      this.clumps.push(...res.clumps);
+    } else if (presetKey === 'cornell3d2') {
+      // Cornell 3D-2 (Chen 1995, Fig 2): F -> F[&+F]F[->F][->F][&F], angle 28.0, depth 3
+      trunkHeight = 1.6;
+      this.maxHeight = 9.2;
+      const turtle = new LSystem3DTurtle('F', { 'F': 'F[&+F]F[->F][->F][&F]' }, 28.0, 3);
+      const res = turtle.interpret(0.68, trunkHeight);
+      this.branches.push(...res.branches);
+      this.clumps.push(...res.clumps);
+    } else {
+      // Genshin Sacred Oak (Stochastic Apical Boughs)
+      trunkHeight = 3.7;
+      this.maxHeight = 9.2;
+      const p3 = new THREE.Vector3(0.0, trunkHeight, 0.0);
+      const numBoughs = 6;
+      for (let i = 0; i < numBoughs; i++) {
+        const azimuth = (i / numBoughs) * Math.PI * 2 + (Math.sin(i * 1.5) * 0.22);
+        const spread = 0.82 + (i % 2 === 0 ? 0.16 : -0.08);
+        const boughDir = new THREE.Vector3(
+          Math.cos(azimuth) * Math.sin(spread),
+          Math.cos(spread) * 0.78 + 0.38,
+          Math.sin(azimuth) * Math.sin(spread)
         ).normalize();
-        const secLen = 2.1 + (s % 2 === 0 ? 0.4 : 0.1);
-        const secEnd = secStart.clone().add(secDir.multiplyScalar(secLen));
 
-        const secOrder = boughOrder + 0.12 + s * 0.04;
+        const boughLen = 3.2 + (i % 3 === 0 ? 0.5 : 0.15);
+        const boughEnd = p3.clone().add(boughDir.clone().multiplyScalar(boughLen));
+        boughEnd.y += 0.45;
+
+        const boughOrder = 0.15 + (i / numBoughs) * 0.15;
         this.branches.push({
-          start: secStart, end: secEnd,
-          radiusStart: 0.20, radiusEnd: 0.09,
-          depth: 2, order: secOrder,
-          swayAmp: 0.02, swayPhase: sideAngle
+          start: p3, end: boughEnd,
+          radiusStart: 0.38, radiusEnd: 0.22,
+          depth: 1, order: boughOrder,
+          swayAmp: 0.012, swayPhase: azimuth
         });
 
-        // Foliage clump at secondary branch end
         this.clumps.push({
-          center: secEnd.clone().add(new THREE.Vector3(0, 0.65, 0)),
-          radius: 1.85 + (s % 2) * 0.2,
-          order: secOrder
+          center: new THREE.Vector3().lerpVectors(p3, boughEnd, 0.62).add(new THREE.Vector3(0, 0.75, 0)),
+          radius: 2.1 + (i % 3) * 0.2,
+          order: boughOrder
         });
 
-        // Tertiary branches (2-3 per secondary branch)
-        for (let t = 0; t < 2; t++) {
-          const tertStart = new THREE.Vector3().lerpVectors(secStart, secEnd, 0.55 + t * 0.40);
-          const tertAngle = sideAngle + (t === 0 ? -0.6 : 0.6);
-          const tertDir = new THREE.Vector3(
-            Math.cos(tertAngle) * 0.75,
-            0.45 + t * 0.1,
-            Math.sin(tertAngle) * 0.75
+        const numSec = 4;
+        for (let s = 0; s < numSec; s++) {
+          const secT = 0.40 + (s / numSec) * 0.58;
+          const secStart = new THREE.Vector3().lerpVectors(p3, boughEnd, secT);
+          const sideAngle = azimuth + ((s % 2 === 0 ? 1 : -1) * 0.72) + 0.12;
+          const secDir = new THREE.Vector3(
+            Math.cos(sideAngle) * 0.82,
+            0.38 + (s % 2) * 0.15,
+            Math.sin(sideAngle) * 0.82
           ).normalize();
-          const tertLen = 1.35 + t * 0.2;
-          const tertEnd = tertStart.clone().add(tertDir.multiplyScalar(tertLen));
-          const tertOrder = secOrder + 0.08 + t * 0.05;
+          const secLen = 2.1 + (s % 2 === 0 ? 0.4 : 0.1);
+          const secEnd = secStart.clone().add(secDir.multiplyScalar(secLen));
 
+          const secOrder = boughOrder + 0.12 + s * 0.04;
           this.branches.push({
-            start: tertStart, end: tertEnd,
-            radiusStart: 0.09, radiusEnd: 0.04,
-            depth: 3, order: tertOrder,
-            swayAmp: 0.028, swayPhase: tertAngle
+            start: secStart, end: secEnd,
+            radiusStart: 0.20, radiusEnd: 0.09,
+            depth: 2, order: secOrder,
+            swayAmp: 0.02, swayPhase: sideAngle
           });
 
           this.clumps.push({
-            center: tertEnd.clone().add(new THREE.Vector3(0, 0.55, 0)),
-            radius: 1.5 + t * 0.2,
-            order: tertOrder
+            center: secEnd.clone().add(new THREE.Vector3(0, 0.65, 0)),
+            radius: 1.85 + (s % 2) * 0.2,
+            order: secOrder
           });
 
-          // Quaternary fine twigs
-          if (t === 1) {
-            const quatDir = tertDir.clone().add(new THREE.Vector3(0.2, 0.35, -0.1)).normalize();
-            const quatEnd = tertEnd.clone().add(quatDir.multiplyScalar(0.85));
+          for (let t = 0; t < 2; t++) {
+            const tertStart = new THREE.Vector3().lerpVectors(secStart, secEnd, 0.55 + t * 0.40);
+            const tertAngle = sideAngle + (t === 0 ? -0.6 : 0.6);
+            const tertDir = new THREE.Vector3(
+              Math.cos(tertAngle) * 0.75,
+              0.45 + t * 0.1,
+              Math.sin(tertAngle) * 0.75
+            ).normalize();
+            const tertLen = 1.35 + t * 0.2;
+            const tertEnd = tertStart.clone().add(tertDir.multiplyScalar(tertLen));
+            const tertOrder = secOrder + 0.08 + t * 0.05;
+
             this.branches.push({
-              start: tertEnd, end: quatEnd,
-              radiusStart: 0.04, radiusEnd: 0.018,
-              depth: 4, order: tertOrder + 0.06,
-              swayAmp: 0.035, swayPhase: tertAngle + 1.2
+              start: tertStart, end: tertEnd,
+              radiusStart: 0.09, radiusEnd: 0.04,
+              depth: 3, order: tertOrder,
+              swayAmp: 0.028, swayPhase: tertAngle
             });
+
             this.clumps.push({
-              center: quatEnd.clone().add(new THREE.Vector3(0, 0.45, 0)),
-              radius: 1.3,
-              order: tertOrder + 0.06
+              center: tertEnd.clone().add(new THREE.Vector3(0, 0.55, 0)),
+              radius: 1.5 + t * 0.2,
+              order: tertOrder
             });
+
+            if (t === 1) {
+              const quatDir = tertDir.clone().add(new THREE.Vector3(0.2, 0.35, -0.1)).normalize();
+              const quatEnd = tertEnd.clone().add(quatDir.multiplyScalar(0.85));
+              this.branches.push({
+                start: tertEnd, end: quatEnd,
+                radiusStart: 0.04, radiusEnd: 0.018,
+                depth: 4, order: tertOrder + 0.06,
+                swayAmp: 0.035, swayPhase: tertAngle + 1.2
+              });
+              this.clumps.push({
+                center: quatEnd.clone().add(new THREE.Vector3(0, 0.45, 0)),
+                radius: 1.3,
+                order: tertOrder + 0.06
+              });
+            }
           }
         }
       }
+
+      this.clumps.push({ center: new THREE.Vector3(0, 6.8, 0), radius: 2.8, order: 0.25 });
+      this.clumps.push({ center: new THREE.Vector3(1.1, 7.6, 0.8), radius: 2.5, order: 0.32 });
+      this.clumps.push({ center: new THREE.Vector3(-1.0, 7.4, -0.7), radius: 2.4, order: 0.38 });
+      this.clumps.push({ center: new THREE.Vector3(-0.6, 8.1, 0.9), radius: 2.3, order: 0.44 });
+      this.clumps.push({ center: new THREE.Vector3(0.8, 8.2, -0.6), radius: 2.2, order: 0.48 });
+      this.clumps.push({ center: new THREE.Vector3(0.2, 8.9, 0.1), radius: 2.1, order: 0.54 });
+      this.clumps.push({ center: new THREE.Vector3(-0.4, 8.6, 0.5), radius: 1.9, order: 0.58 });
+      this.clumps.push({ center: new THREE.Vector3(0.5, 9.1, -0.2), radius: 1.8, order: 0.62 });
     }
 
-    // Top crown dome clumps (majestic layered anime crown silhouette)
-    this.clumps.push({ center: new THREE.Vector3(0, 6.8, 0), radius: 2.8, order: 0.25 });
-    this.clumps.push({ center: new THREE.Vector3(1.1, 7.6, 0.8), radius: 2.5, order: 0.32 });
-    this.clumps.push({ center: new THREE.Vector3(-1.0, 7.4, -0.7), radius: 2.4, order: 0.38 });
-    this.clumps.push({ center: new THREE.Vector3(-0.6, 8.1, 0.9), radius: 2.3, order: 0.44 });
-    this.clumps.push({ center: new THREE.Vector3(0.8, 8.2, -0.6), radius: 2.2, order: 0.48 });
-    this.clumps.push({ center: new THREE.Vector3(0.2, 8.9, 0.1), radius: 2.1, order: 0.54 });
-    this.clumps.push({ center: new THREE.Vector3(-0.4, 8.6, 0.5), radius: 1.9, order: 0.58 });
-    this.clumps.push({ center: new THREE.Vector3(0.5, 9.1, -0.2), radius: 1.8, order: 0.62 });
-
-    this.buildBranchMeshes();
+    this.buildBranchMeshes(trunkHeight);
     this.buildLeaves();
 
     this.branchCount = this.branches.length + 33; // including 32 trunk ring segments
@@ -1006,7 +1184,7 @@ class TreeGenerator {
     };
   }
 
-  buildBranchMeshes() {
+  buildBranchMeshes(trunkHeight = 3.7) {
     const radialSegs = isMobile ? 24 : 32;
     const positions = [];
     const normals = [];
@@ -1022,9 +1200,10 @@ class TreeGenerator {
     const trunkRings = [];
     for (let i = 0; i <= numTrunkRings; i++) {
       const t = i / numTrunkRings;
-      const y = t * 3.7;
+      const y = t * trunkHeight;
       // Flaring buttress base smoothly transitioning to bough divergence
-      const radius = 0.40 + 0.50 * Math.pow(1.0 - t, 2.8) + (1.0 - t) * 0.08;
+      const baseRad = trunkHeight > 2.5 ? 0.40 : 0.32;
+      const radius = baseRad + 0.48 * Math.pow(1.0 - t, 2.8) + (1.0 - t) * 0.08;
       const wobbleX = Math.sin(t * 3.5) * 0.08 + Math.sin(t * 7.0) * 0.03;
       const wobbleZ = Math.cos(t * 3.0) * 0.06 - Math.sin(t * 6.0) * 0.02;
       trunkRings.push({
@@ -1734,7 +1913,7 @@ composer.addPass(colorPass);
 
 // ─── TREE INSTANCE ────────────────────────────────────────
 const tree = new TreeGenerator();
-const treeStats = tree.buildTree();
+let treeStats = tree.buildTree('genshin');
 window.tree = tree;
 document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
 document.getElementById('stat-leaves').textContent = '0';
@@ -1744,6 +1923,27 @@ document.getElementById('stat-dbh').textContent = '0.0 cm';
 document.getElementById('stat-volume').textContent = '0.000 m³';
 document.getElementById('stat-cai').textContent = '0.0 cm/yr';
 document.getElementById('stat-stage').textContent = 'Seedling (Establishment)';
+
+// ─── 3D L-SYSTEM PRESET SELECTOR (CORNELL / CHEN 1995) ─────
+const selectPreset = document.getElementById('select-preset');
+const statGrammar = document.getElementById('stat-grammar');
+if (selectPreset) {
+  selectPreset.addEventListener('change', (e) => {
+    const val = e.target.value;
+    treeStats = tree.buildTree(val);
+    document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
+    if (val === 'genshin') {
+      statGrammar.textContent = 'Stochastic Apical Boughs';
+      statGrammar.title = 'Genshin Sacred Oak: Stochastic Apical Bough Crown';
+    } else if (val === 'cornell3d1') {
+      statGrammar.textContent = 'F → F[-&<F][<++&F]||F[--&>F][+&F]';
+      statGrammar.title = 'Cornell 3D-1: F[-&<F][<++&F]||F[--&>F][+&F] (δ=22.5°, N=3)';
+    } else if (val === 'cornell3d2') {
+      statGrammar.textContent = 'F → F[&+F]F[->F][->F][&F]';
+      statGrammar.title = 'Cornell 3D-2: F[&+F]F[->F][->F][&F] (δ=28.0°, N=3)';
+    }
+  });
+}
 
 // ─── PLAYBACK STATE (CHAPMAN-RICHARDS REACTIVE) ────────────
 const state = {
