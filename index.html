@@ -550,138 +550,49 @@ function createGrassField() {
     `
   });
 
-  // Build instanced grass geometry
-  const bladeGeo = new THREE.PlaneGeometry(0.08, 1, 1, 4);
-  // Bend the blade slightly
-  const bendPositions = bladeGeo.attributes.position;
-  for (let i = 0; i < bendPositions.count; i++) {
-    const x = bendPositions.getX(i);
-    const y = bendPositions.getY(i);
-    bendPositions.setX(i, x + y * y * 0.04);
-  }
+  // Build instanced grass geometry (InstancedBufferGeometry — no merge loop)
+  const bladeGeo = new THREE.InstancedBufferGeometry();
+  // Base quad: 4 verts
+  const bVerts = new Float32Array([-0.04,0,0, 0.04,0,0, -0.04,1,0, 0.04,1,0]);
+  const bUvs   = new Float32Array([0,0, 1,0, 0,1, 1,1]);
+  const bIdx   = new Uint16Array([0,2,1, 1,2,3]);
+  bladeGeo.setAttribute('position', new THREE.BufferAttribute(bVerts, 3));
+  bladeGeo.setAttribute('uv', new THREE.BufferAttribute(bUvs, 2));
+  bladeGeo.setIndex(new THREE.BufferAttribute(bIdx, 1));
 
   const offsets = new Float32Array(bladeCount * 3);
-  const scales = new Float32Array(bladeCount);
-  const phases = new Float32Array(bladeCount);
-  const colorValues = new Float32Array(bladeCount * 3);
-
-  const trunkX = 0, trunkZ = 0;
-  const trunkRadius = 2.5; // exclusion zone around trunk
+  const scales  = new Float32Array(bladeCount);
+  const phases  = new Float32Array(bladeCount);
+  const colors  = new Float32Array(bladeCount * 3);
+  const trunkR  = 2.5;
 
   let placed = 0;
-  let attempts = 0;
-  const maxAttempts = bladeCount * 20;
-
-  while (placed < bladeCount && attempts < maxAttempts) {
-    attempts++;
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.pow(Math.random(), 0.6) * spreadRadius;
-
-    let x = Math.cos(angle) * dist;
-    let z = Math.sin(angle) * dist;
-
-    // Check distance from trunk
-    const dx = x - trunkX, dz = z - trunkZ;
-    const trunkDist = Math.sqrt(dx*dx + dz*dz);
-
-    if (trunkDist < trunkRadius) continue;
-
-    // Ground height
-    const gh = noise.noise3D(x * 0.05, z * 0.05, 0) * 0.5
-             + noise.noise3D(x * 0.15, z * 0.15, 1) * 0.15
-             - Math.max(0, 2.5 - Math.sqrt(x*x + z*z)) * 0.1;
-
-    offsets[placed * 3]     = x;
-    offsets[placed * 3 + 1] = gh;
-    offsets[placed * 3 + 2] = z;
-
-    // Grass height varies with distance
-    const heightFalloff = Math.min(1, trunkDist / 3.0);
-    scales[placed] = (0.4 + Math.random() * 0.8) * (0.5 + heightFalloff * 0.5);
+  while (placed < bladeCount) {
+    const a = Math.random() * Math.PI * 2;
+    const d = Math.pow(Math.random(), 0.6) * spreadRadius;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (Math.sqrt(x*x + z*z) < trunkR) continue;
+    const gh = noise.noise3D(x*0.05, z*0.05, 0)*0.5
+             + noise.noise3D(x*0.15, z*0.15, 1)*0.15
+             - Math.max(0, 2.5 - Math.sqrt(x*x + z*z))*0.1;
+    offsets[placed*3]=x; offsets[placed*3+1]=gh; offsets[placed*3+2]=z;
+    scales[placed] = (0.4+Math.random()*0.8)*(0.5+Math.min(1,Math.sqrt(x*x+z*z)/3)*0.5);
     phases[placed] = Math.random();
-
-    // Color variation
-    const cn = noise.noise3D(x * 0.5, z * 0.5, 5);
-    const brightness = 0.15 + cn * 0.06 + Math.random() * 0.05;
-    const greenness = 0.35 + Math.random() * 0.12;
-    colorValues[placed * 3]     = brightness;
-    colorValues[placed * 3 + 1] = greenness + cn * 0.03;
-    colorValues[placed * 3 + 2] = brightness * 0.4;
-
+    const cn = noise.noise3D(x*0.5, z*0.5, 5);
+    colors[placed*3]  = 0.15+cn*0.06+Math.random()*0.05;
+    colors[placed*3+1]= 0.35+Math.random()*0.12+cn*0.03;
+    colors[placed*3+2]= (0.15+cn*0.06)*0.4;
     placed++;
   }
 
-  bladeGeo.setAttribute('offset', new THREE.BufferAttribute(offsets, 3));
-  bladeGeo.setAttribute('scale', new THREE.BufferAttribute(scales, 1));
-  bladeGeo.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
-  bladeGeo.setAttribute('colorVal', new THREE.BufferAttribute(colorValues, 3));
+  bladeGeo.setAttribute('offset',   new THREE.InstancedBufferAttribute(offsets, 3));
+  bladeGeo.setAttribute('scale',    new THREE.InstancedBufferAttribute(scales, 1));
+  bladeGeo.setAttribute('phase',    new THREE.InstancedBufferAttribute(phases, 1));
+  bladeGeo.setAttribute('colorVal', new THREE.InstancedBufferAttribute(colors, 3));
 
-  const grass = new THREE.InstancedMesh(bladeGeo, grassMaterial, placed);
-  grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-  // Hack to use ShaderMaterial with InstancedMesh — build a regular mesh
-  const instancedMesh = new THREE.InstancedMesh(bladeGeo, grassMaterial, placed);
-  instancedMesh.name = 'grass';
-  // Manually set instance matrices
-  const dummy = new THREE.Object3D();
-  const mergedGeo = new THREE.InstancedBufferGeometry();
-  mergedGeo.index = bladeGeo.index;
-  mergedGeo.attributes.position = bladeGeo.attributes.position;
-  mergedGeo.attributes.uv = bladeGeo.attributes.uv;
-  mergedGeo.attributes.normal = bladeGeo.attributes.normal;
-
-  // Actually let's use a merged approach via BufferGeometryUtils approach
-  // Instead, let's merge blade instances into one geometry
-  scene.remove(instancedMesh);
-
-  // Rebuild as merged geometry
-  const totalVerts = placed * bladeGeo.attributes.position.count;
-  const mergedPositions = new Float32Array(totalVerts * 3);
-  const mergedUvs = new Float32Array(totalVerts * 2);
-  const mergedColors = new Float32Array(totalVerts * 3);
-  const mergedOffsets = new Float32Array(totalVerts * 3);
-  const mergedScales = new Float32Array(totalVerts);
-  const mergedPhases = new Float32Array(totalVerts);
-
-  const srcPos = bladeGeo.attributes.position;
-  const srcUv = bladeGeo.attributes.uv;
-  const vertsPerBlade = srcPos.count;
-
-  for (let b = 0; b < placed; b++) {
-    const ox = offsets[b * 3], oy = offsets[b * 3 + 1], oz = offsets[b * 3 + 2];
-    const sc = scales[b], ph = phases[b];
-
-    for (let v = 0; v < vertsPerBlade; v++) {
-      const idx = b * vertsPerBlade + v;
-      mergedPositions[idx * 3]     = srcPos.getX(v);
-      mergedPositions[idx * 3 + 1] = srcPos.getY(v);
-      mergedPositions[idx * 3 + 2] = srcPos.getZ(v);
-      mergedUvs[idx * 2]     = srcUv.getX(v);
-      mergedUvs[idx * 2 + 1] = srcUv.getY(v);
-      mergedColors[idx * 3]     = colorValues[b * 3];
-      mergedColors[idx * 3 + 1] = colorValues[b * 3 + 1];
-      mergedColors[idx * 3 + 2] = colorValues[b * 3 + 2];
-      mergedOffsets[idx * 3]     = ox;
-      mergedOffsets[idx * 3 + 1] = oy;
-      mergedOffsets[idx * 3 + 2] = oz;
-      mergedScales[idx] = sc;
-      mergedPhases[idx] = ph;
-    }
-  }
-
-  const mergedGeo = new THREE.BufferGeometry();
-  mergedGeo.setAttribute('position', new THREE.BufferAttribute(mergedPositions, 3));
-  mergedGeo.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
-  mergedGeo.setAttribute('colorVal', new THREE.BufferAttribute(mergedColors, 3));
-  mergedGeo.setAttribute('offset', new THREE.BufferAttribute(mergedOffsets, 3));
-  mergedGeo.setAttribute('scale', new THREE.BufferAttribute(mergedScales, 1));
-  mergedGeo.setAttribute('phase', new THREE.BufferAttribute(mergedPhases, 1));
-  mergedGeo.computeVertexNormals();
-
-  const grassMesh = new THREE.Mesh(mergedGeo, grassMaterial);
+  const grassMesh = new THREE.Mesh(bladeGeo, grassMaterial);
   grassMesh.name = 'grass';
   grassMesh.frustumCulled = false;
-  grassMaterial.needsUpdate = true;
   scene.add(grassMesh);
 
   document.getElementById('stat-grass').textContent = placed.toLocaleString();
@@ -820,21 +731,23 @@ class TreeGenerator {
   }
 
   buildBranchMeshes() {
-    // Merge all branch cylinders into one geometry
-    const branchGeometries = [];
-    const positions = [];
-    const normals = [];
-    const uvs = [];
+    // Pre-allocate arrays — avoid .push() reallocation overhead
+    const maxBranches = this.branches.length;
+    const maxVertsPerBranch = 50; // conservative upper bound
+    const totalVertsEstimate = maxBranches * maxVertsPerBranch;
+    const positions = new Float32Array(totalVertsEstimate * 3);
+    const normals = new Float32Array(totalVertsEstimate * 3);
+    const uvs = new Float32Array(totalVertsEstimate * 2);
     const indices = [];
-    const colorAttr = [];
-    const growthAttr = [];
-    const swayPhaseAttr = [];
-    const swayAmpAttr = [];
-    const stiffnessAttr = [];
-    const branchIndexAttr = [];
-    const branchTAttr = [];
-
+    const colorAttr = new Float32Array(totalVertsEstimate * 3);
+    const growthAttr = new Float32Array(totalVertsEstimate);
+    const swayPhaseAttr = new Float32Array(totalVertsEstimate);
+    const swayAmpAttr = new Float32Array(totalVertsEstimate);
+    const stiffnessAttr = new Float32Array(totalVertsEstimate);
+    const branchIndexAttr = new Float32Array(totalVertsEstimate);
+    const branchTAttr = new Float32Array(totalVertsEstimate);
     let vertexOffset = 0;
+    let vertCount = 0;
 
     for (let b = 0; b < this.branches.length; b++) {
       const branch = this.branches[b];
@@ -873,22 +786,22 @@ class TreeGenerator {
           const py = posOnBranch.y + ny * r;
           const pz = posOnBranch.z + nz * r;
 
-          positions.push(px, py, pz);
-          normals.push(nx, ny, nz);
-          uvs.push(t, angle / (Math.PI * 2));
-          growthAttr.push(branch.growOrder / this.branches.length);
-          swayPhaseAttr.push(branch.swayPhase);
-          swayAmpAttr.push(branch.swayAmp);
-          stiffnessAttr.push(branch.stiffness);
-          branchIndexAttr.push(b);
-          branchTAttr.push(t);
+          const i3 = vertCount * 3;
+          positions[i3]=px; positions[i3+1]=py; positions[i3+2]=pz;
+          normals[i3]=nx; normals[i3+1]=ny; normals[i3+2]=nz;
+          uvs[vertCount*2]=t; uvs[vertCount*2+1]=angle/(Math.PI*2);
+          growthAttr[vertCount]=branch.growOrder/this.branches.length;
+          swayPhaseAttr[vertCount]=branch.swayPhase;
+          swayAmpAttr[vertCount]=branch.swayAmp;
+          stiffnessAttr[vertCount]=branch.stiffness;
+          branchIndexAttr[vertCount]=b;
+          branchTAttr[vertCount]=t;
 
-          // Color — darker at base, lighter at tip
-          const roughness = 0.7 + depthRatio * 0.2;
           const brownR = 0.22 + depthRatio * 0.05;
           const brownG = 0.13 + depthRatio * 0.03;
           const brownB = 0.05 + depthRatio * 0.02;
-          colorAttr.push(brownR, brownG, brownB);
+          colorAttr[i3]=brownR; colorAttr[i3+1]=brownG; colorAttr[i3+2]=brownB;
+          vertCount++;
         }
       }
 
@@ -905,20 +818,19 @@ class TreeGenerator {
       vertexOffset += (segs + 1) * (radialSegs + 1);
     }
 
-    if (positions.length === 0) return;
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setAttribute('colorVal', new THREE.Float32BufferAttribute(colorAttr, 3));
-    geo.setAttribute('growthIdx', new THREE.Float32BufferAttribute(growthAttr, 1));
-    geo.setAttribute('swayPhase', new THREE.Float32BufferAttribute(swayPhaseAttr, 1));
-    geo.setAttribute('swayAmp', new THREE.Float32BufferAttribute(swayAmpAttr, 1));
-    geo.setAttribute('stiffness', new THREE.Float32BufferAttribute(stiffnessAttr, 1));
-    geo.setAttribute('branchIdx', new THREE.Float32BufferAttribute(branchIndexAttr, 1));
-    geo.setAttribute('branchT', new THREE.Float32BufferAttribute(branchTAttr, 1));
-    geo.setIndex(indices);
+    // Trim to actual used vertices
+    const finalGeo = new THREE.BufferGeometry();
+    finalGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions.subarray(0, vertCount*3), 3));
+    finalGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals.subarray(0, vertCount*3), 3));
+    finalGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.subarray(0, vertCount*2), 2));
+    finalGeo.setAttribute('colorVal', new THREE.Float32BufferAttribute(colorAttr.subarray(0, vertCount*3), 3));
+    finalGeo.setAttribute('growthIdx', new THREE.Float32BufferAttribute(growthAttr.subarray(0, vertCount), 1));
+    finalGeo.setAttribute('swayPhase', new THREE.Float32BufferAttribute(swayPhaseAttr.subarray(0, vertCount), 1));
+    finalGeo.setAttribute('swayAmp', new THREE.Float32BufferAttribute(swayAmpAttr.subarray(0, vertCount), 1));
+    finalGeo.setAttribute('stiffness', new THREE.Float32BufferAttribute(stiffnessAttr.subarray(0, vertCount), 1));
+    finalGeo.setAttribute('branchIdx', new THREE.Float32BufferAttribute(branchIndexAttr.subarray(0, vertCount), 1));
+    finalGeo.setAttribute('branchT', new THREE.Float32BufferAttribute(branchTAttr.subarray(0, vertCount), 1));
+    finalGeo.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
 
     const mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -1057,7 +969,7 @@ class TreeGenerator {
       `
     });
 
-    this.trunkMesh = new THREE.Mesh(geo, mat);
+    this.trunkMesh = new THREE.Mesh(finalGeo, mat);
     this.trunkMesh.name = 'treeBranches';
     this.trunkMesh.castShadow = true;
     this.trunkMesh.receiveShadow = true;
