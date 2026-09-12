@@ -16,7 +16,7 @@
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 16px; padding: 18px 22px;
-    color: #e0e0e0; min-width: 250px; max-width: 300px;
+    color: #e0e0e0; width: 330px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     transition: all 0.3s ease;
   }
@@ -39,12 +39,18 @@
   }
 
   .stat-row {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
     padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
   }
   .stat-row:last-child { border-bottom: none; }
-  .stat-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
-  .stat-value { font-size: 12px; font-weight: 600; color: #c8e6a0; font-variant-numeric: tabular-nums; }
+  .stat-label {
+    font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;
+    flex-shrink: 0; white-space: nowrap;
+  }
+  .stat-value {
+    font-size: 12px; font-weight: 600; color: #c8e6a0; font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
 
   #timeline {
     position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
@@ -153,29 +159,41 @@
   <div class="ui-header">
     <div>
       <h2>Arbor Genesis</h2>
-      <div class="subtitle">Real-time Growth Simulation</div>
+      <div class="subtitle">ANU Biological Mensuration</div>
     </div>
     <button id="ui-toggle" title="Toggle Stats">&#x25BE;</button>
   </div>
   <div id="ui-body">
     <div class="stat-row">
-      <span class="stat-label">Elapsed</span>
-      <span class="stat-value" id="stat-time">0:00 / 3:00</span>
+      <span class="stat-label">Elapsed / Age</span>
+      <span class="stat-value" id="stat-time">0:00 (0.0 yr)</span>
     </div>
     <div class="stat-row">
       <span class="stat-label">Growth Stage</span>
-      <span class="stat-value" id="stat-stage">Seedling</span>
+      <span class="stat-value" id="stat-stage">Seedling (Establishment)</span>
     </div>
     <div class="stat-row">
-      <span class="stat-label">Height</span>
-      <span class="stat-value" id="stat-height">0.0 m</span>
+      <span class="stat-label">Height (H)</span>
+      <span class="stat-value" id="stat-height">0.00 m</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">DBH (1.3m)</span>
+      <span class="stat-value" id="stat-dbh">0.0 cm</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Stem Wood Vol</span>
+      <span class="stat-value" id="stat-volume">0.000 m³</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">CAI Rate</span>
+      <span class="stat-value" id="stat-cai">0.0 cm/yr</span>
     </div>
     <div class="stat-row">
       <span class="stat-label">Branches</span>
       <span class="stat-value" id="stat-branches">0</span>
     </div>
     <div class="stat-row">
-      <span class="stat-label">Leaves</span>
+      <span class="stat-label">Foliage Leaves</span>
       <span class="stat-value" id="stat-leaves">0</span>
     </div>
     <div class="stat-row">
@@ -202,8 +220,8 @@
     <div class="bar-fill" id="timeline-fill"></div>
   </div>
   <div class="time-display">
-    <span id="time-current">0:00</span>
-    <span id="time-total">3:00</span>
+    <span id="time-current">0:00 (Age 0.0 yr)</span>
+    <span id="time-total">3:00 (Age 60.0 yr)</span>
   </div>
   <div class="controls">
     <button id="btn-slower" title="Slower">&#x275A;&#x275A;</button>
@@ -277,17 +295,43 @@ class SimplexNoise {
 }
 const noise = new SimplexNoise(42);
 
-// ─── CONFIGURATION ────────────────────────────────────────
-const GROWTH_DURATION = 180; // 3 minutes in seconds
+// ─── CONFIGURATION & BIOLOGICAL GROWTH (BRACK & WOOD 1998) ─
+const GROWTH_DURATION = 180; // 3 minutes simulation in seconds
+const MAX_TREE_AGE = 60.0;   // 60 years biological lifespan
+
+// Chapman-Richards Cumulative Growth Model: Y = k * (1 - exp(-c * A))^m
+// Documented in Brack & Wood (1998) for forest cumulative height & volume increment
+const CR_K = 1.0;
+const CR_C = 0.068;
+const CR_M = 2.6;
+
+function chapmanRichards(A, k, c, m) {
+  if (A <= 0) return 0;
+  return k * Math.pow(1.0 - Math.exp(-c * A), m);
+}
+
+// Current Annual Increment (CAI): first derivative dY/dA
+function chapmanRichardsCAI(A, k, c, m) {
+  if (A <= 0) return 0;
+  const expTerm = Math.exp(-c * A);
+  return k * m * c * expTerm * Math.pow(1.0 - expTerm, m - 1.0);
+}
+
+const CR_MAX_VAL = chapmanRichards(MAX_TREE_AGE, CR_K, CR_C, CR_M);
+
+function normalizedChapmanRichards(age) {
+  if (age <= 0) return 0;
+  if (age >= MAX_TREE_AGE) return 1.0;
+  return Math.min(1.0, chapmanRichards(age, CR_K, CR_C, CR_M) / CR_MAX_VAL);
+}
+
+// Five biological phases from ANU forestry mensuration (Brack & Wood 1998)
 const GROWTH_PHASES = [
-  { time: 0.00, label: 'Seedling',  height: 0.05 },
-  { time: 0.05, label: 'Sprouting', height: 0.1 },
-  { time: 0.12, label: 'Sapling',   height: 0.3 },
-  { time: 0.25, label: 'Growing',   height: 0.6 },
-  { time: 0.45, label: 'Maturing',  height: 0.8 },
-  { time: 0.70, label: 'Flowering', height: 0.92 },
-  { time: 0.88, label: 'Fruiting',  height: 0.97 },
-  { time: 1.00, label: 'Full Tree',  height: 1.0 },
+  { age: 0.0,  label: 'Seedling (Establishment)',  desc: 'Early juvenile root & shoot establishment (d²Y/dt² > 0)' },
+  { age: 6.0,  label: 'Juvenile (Apical Lead)',   desc: 'Accelerating CAI; leader reaches breast height (1.3m)' },
+  { age: 14.0, label: 'Full Vigour (Peak CAI)',   desc: 'Inflection point; maximum vertical height velocity' },
+  { age: 26.0, label: 'Maturity (Culmination)',   desc: 'Culmination of MAI (CAI = MAI); secondary cambial DBH surge' },
+  { age: 44.0, label: 'Senescent (Veteran)',      desc: 'Decelerating growth approaching asymptote; crown spreading' },
 ];
 
 // ─── SCENE SETUP ──────────────────────────────────────────
@@ -1695,17 +1739,42 @@ window.tree = tree;
 document.getElementById('stat-branches').textContent = treeStats.branches.toLocaleString();
 document.getElementById('stat-leaves').textContent = '0';
 document.getElementById('stat-poly').textContent = (80000 + 50 * 280).toLocaleString();
-document.getElementById('stat-height').textContent = '0.0 m';
-document.getElementById('stat-stage').textContent = 'Seedling';
+document.getElementById('stat-height').textContent = '0.00 m';
+document.getElementById('stat-dbh').textContent = '0.0 cm';
+document.getElementById('stat-volume').textContent = '0.000 m³';
+document.getElementById('stat-cai').textContent = '0.0 cm/yr';
+document.getElementById('stat-stage').textContent = 'Seedling (Establishment)';
 
-// ─── PLAYBACK STATE ───────────────────────────────────────
+// ─── PLAYBACK STATE (CHAPMAN-RICHARDS REACTIVE) ────────────
 const state = {
-  growth: 0,
   time: 0,
+  speed: 1.0,        // 1x = 180s for full 60-year lifespan
   playing: true,
-  speed: 1.0,        // 1x = 180s for full growth
   windBase: 0.3,
   windVariation: 0,
+  get fraction() {
+    return Math.min(1.0, Math.max(0.0, this.time / GROWTH_DURATION));
+  },
+  set fraction(f) {
+    this.time = Math.max(0, Math.min(1, f)) * GROWTH_DURATION;
+  },
+  get age() {
+    return this.fraction * MAX_TREE_AGE;
+  },
+  get growth() {
+    return normalizedChapmanRichards(this.age);
+  },
+  set growth(g) {
+    if (g <= 0.001) {
+      this.time = 0;
+    } else if (g >= 0.999) {
+      this.time = GROWTH_DURATION;
+    } else {
+      const clampedG = Math.max(0.0001, Math.min(0.9999, g * CR_MAX_VAL));
+      const estAge = -Math.log(1.0 - Math.pow(clampedG, 1.0 / CR_M)) / CR_C;
+      this.fraction = estAge / MAX_TREE_AGE;
+    }
+  }
 };
 window.state = state;
 
@@ -1717,9 +1786,9 @@ function getWindStrength() {
   return state.windBase * (0.5 + n1 * 0.5 + n2 * 0.3);
 }
 
-function getGrowthStage(growth) {
+function getGrowthStage(age) {
   for (let i = GROWTH_PHASES.length - 1; i >= 0; i--) {
-    if (growth >= GROWTH_PHASES[i].time) return GROWTH_PHASES[i];
+    if (age >= GROWTH_PHASES[i].age) return GROWTH_PHASES[i];
   }
   return GROWTH_PHASES[0];
 }
@@ -1752,8 +1821,7 @@ document.getElementById('btn-slower2').addEventListener('click', () => setSpeed(
 document.getElementById('btn-faster').addEventListener('click', () => setSpeed(2.0, 'btn-faster'));
 document.getElementById('btn-fastest').addEventListener('click', () => setSpeed(4.0, 'btn-fastest'));
 btnReset.addEventListener('click', () => {
-  state.growth = 0;
-  state.time = 0;
+  state.fraction = 0;
   state.playing = true;
   btnPlay.innerHTML = '&#x275A;&#x275A;';
   btnPlay.classList.add('active');
@@ -1763,8 +1831,8 @@ btnReset.addEventListener('click', () => {
 function handleTimelineSeek(e) {
   const rect = timelineBar.getBoundingClientRect();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-  const fraction = (clientX - rect.left) / rect.width;
-  state.growth = Math.max(0, Math.min(1, fraction));
+  const fraction = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  state.fraction = fraction;
 }
 timelineBar.addEventListener('click', handleTimelineSeek);
 timelineBar.addEventListener('touchstart', handleTimelineSeek, { passive: true });
@@ -1809,15 +1877,37 @@ function animate(now) {
     fpsTime = 0;
   }
 
-  // Growth
-  if (state.playing && state.growth < 1.0) {
-    state.time += dt;
-    state.growth = Math.min(1.0, state.growth + dt / (GROWTH_DURATION / state.speed));
+  // Biological time advancement (0 to 180s timeline maps to 0 to 60.0 biological years)
+  if (state.playing && state.fraction < 1.0) {
+    state.time = Math.min(GROWTH_DURATION, state.time + (dt * state.speed));
   }
 
-  const g = state.growth;
-  const elapsed = g * GROWTH_DURATION;
+  const fraction = state.fraction;
+  const age = state.age;
+  const g = state.growth; // Sigmoidal Chapman-Richards normalized factor
+  const elapsed = state.time;
   const wind = getWindStrength();
+
+  // Dendrometric metrics from Brack & Wood (1998)
+  const currentHeight = tree.maxHeight * g;
+  const cai = chapmanRichardsCAI(age, tree.maxHeight, CR_C, CR_M) * 100; // cm/yr
+
+  // DBH lags behind height; initiated after tree passes breast height (1.3m)
+  const ageBreastHeight = 9.2; // years when height reaches 1.3m
+  let dbh = 0;
+  if (age > ageBreastHeight) {
+    const effAge = age - ageBreastHeight;
+    dbh = 54.0 * Math.pow(1.0 - Math.exp(-0.055 * effAge), 1.8);
+  }
+
+  // Stem Wood Volume (m³) via V = (pi/4) * (DBH/100)^2 * H * form_factor (0.42)
+  let stemVolume = 0;
+  if (age > ageBreastHeight) {
+    stemVolume = (Math.PI / 4) * Math.pow(dbh / 100, 2) * currentHeight * 0.42;
+  } else if (currentHeight > 0.01) {
+    const baseD = 0.015 * (age / ageBreastHeight);
+    stemVolume = (Math.PI / 12) * Math.pow(baseD, 2) * currentHeight;
+  }
 
   // Update grass
   grassSystem.material.uniforms.uTime.value = now * 0.001;
@@ -1860,11 +1950,14 @@ function animate(now) {
   // Wind exposure
   sunLight.intensity = 1.8 + wind * 0.4;
 
-  // UI updates
-  const stage = getGrowthStage(g);
-  document.getElementById('stat-time').textContent = `${formatTime(elapsed)} / 3:00`;
+  // UI updates with biological mensuration metrics
+  const stage = getGrowthStage(age);
+  document.getElementById('stat-time').textContent = `${formatTime(elapsed)} (${age.toFixed(1)} yr)`;
   document.getElementById('stat-stage').textContent = stage.label;
-  document.getElementById('stat-height').textContent = `${(tree.maxHeight * g).toFixed(1)} m`;
+  document.getElementById('stat-height').textContent = `${currentHeight.toFixed(2)} m`;
+  document.getElementById('stat-dbh').textContent = `${dbh.toFixed(1)} cm`;
+  document.getElementById('stat-volume').textContent = `${stemVolume.toFixed(3)} m³`;
+  document.getElementById('stat-cai').textContent = `${cai.toFixed(1)} cm/yr`;
   document.getElementById('stat-leaves').textContent = Math.round(treeStats.leaves * Math.max(0, (g - 0.25) / 0.75)).toLocaleString();
 
   // Dynamic polygon count tracking real-time growth
@@ -1875,8 +1968,9 @@ function animate(now) {
   document.getElementById('stat-poly').textContent = currentTotalPolys.toLocaleString();
 
   document.getElementById('stat-wind').textContent = `${wind.toFixed(1)} m/s`;
-  document.getElementById('time-current').textContent = formatTime(elapsed);
-  timelineFill.style.width = `${g * 100}%`;
+  document.getElementById('time-current').textContent = `${formatTime(elapsed)} (Age ${age.toFixed(1)} yr)`;
+  document.getElementById('time-total').textContent = `3:00 (Age 60.0 yr)`;
+  timelineFill.style.width = `${fraction * 100}%`;
 
   // Controls
   controls.update();
